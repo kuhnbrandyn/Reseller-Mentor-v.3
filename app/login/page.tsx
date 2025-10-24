@@ -10,45 +10,60 @@ export default function LoginPage() {
   const router = useRouter();
 
   useEffect(() => {
-    // Wrap in async function to ensure proper await/cleanup behavior
-    const handleAuthChange = async () => {
-      const {
-        data: { subscription },
-      } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const { data: subscription } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
         if (event === "SIGNED_IN" && session?.user) {
+          let redirected = false;
+
           try {
+            // ⏱ Add a manual timeout safety net (prevents infinite hang)
+            const timeout = setTimeout(() => {
+              if (!redirected) {
+                console.warn("Timeout: redirecting to signup fallback");
+                router.replace("/signup");
+                redirected = true;
+              }
+            }, 1200);
+
+            // ✅ Fetch profile safely
             const { data: profile, error } = await supabase
               .from("profiles")
               .select("payment_status")
               .eq("id", session.user.id)
-              .maybeSingle();
+              .single({ head: false }); // handles no-row cases cleanly
 
+            clearTimeout(timeout); // stop fallback timer if query resolves
+
+            // 🚫 Redirect if no profile or fetch error
             if (error || !profile) {
               console.warn("No profile found or fetch error:", error);
               router.replace("/signup");
+              redirected = true;
               return;
             }
 
+            // 🚫 Redirect unpaid
             if (profile.payment_status !== "paid") {
               router.replace("/signup");
+              redirected = true;
               return;
             }
 
-            // ✅ Use replace() and small delay to allow Supabase session sync
-            setTimeout(() => router.replace("/dashboard"), 300);
+            // ✅ Paid user → dashboard
+            router.replace("/dashboard");
+            redirected = true;
           } catch (err) {
             console.error("Login check error:", err);
             router.replace("/signup");
+            redirected = true;
           }
         }
-      });
+      }
+    );
 
-      return () => {
-        subscription?.unsubscribe();
-      };
+    return () => {
+      subscription?.subscription?.unsubscribe?.();
     };
-
-    handleAuthChange();
   }, [router]);
 
   return (
@@ -84,3 +99,4 @@ export default function LoginPage() {
     </main>
   );
 }
+
