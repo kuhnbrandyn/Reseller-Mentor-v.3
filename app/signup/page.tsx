@@ -76,9 +76,9 @@ export default function SignUpPage() {
           Build a $1,000+ Sales Day Business
         </h1>
         <p className="text-gray-300 text-lg mb-8">
-          Join <span className="text-[#E4B343] font-semibold">Reseller Mentor AI</span> —
-          the only reseller membership that combines data-driven AI insights, ongoing supplier
-          access, and real growth strategies built by sellers for sellers.
+          Join <span className="text-[#E4B343] font-semibold">Reseller Mentor AI</span> — 
+          the only reseller membership that combines data-driven AI insights, 
+          ongoing supplier access, and real growth strategies built by sellers for sellers.
         </p>
 
         {/* === PRICE CUT VISUAL === */}
@@ -96,7 +96,74 @@ export default function SignUpPage() {
         </div>
       </section>
 
-      {/* === FORM === */}
+      {/* === WHAT'S INCLUDED === */}
+      <section className="max-w-5xl w-full px-6 text-center mb-16">
+        <h2 className="text-3xl font-bold text-[#E4B343] mb-10">What’s Included</h2>
+
+        <div className="grid md:grid-cols-2 gap-8 text-left text-gray-300">
+          <div className="flex items-start gap-3">
+            <span className="text-[#E4B343] text-2xl">💡</span>
+            <div>
+              <h3 className="font-semibold text-white">AI Mentor for Resellers</h3>
+              <p className="text-gray-400 text-sm">
+                Get instant answers with strategy, data, and long-term planning behind every response.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-3">
+            <span className="text-[#E4B343] text-2xl">📋</span>
+            <div>
+              <h3 className="font-semibold text-white">Ongoing Supplier Lists</h3>
+              <p className="text-gray-400 text-sm">
+                Updated wholesale & liquidation sources, verified and ranked for ROI.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-3">
+            <span className="text-[#E4B343] text-2xl">🛡️</span>
+            <div>
+              <h3 className="font-semibold text-white">Scam Avoidance Training</h3>
+              <p className="text-gray-400 text-sm">
+                Learn how to vet suppliers and protect your funds while finding deals.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-3">
+            <span className="text-[#E4B343] text-2xl">🏛️</span>
+            <div>
+              <h3 className="font-semibold text-white">Business Setup Guides</h3>
+              <p className="text-gray-400 text-sm">
+                Structure your LLC, taxes, and operations correctly for scaling.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-3">
+            <span className="text-[#E4B343] text-2xl">🚚</span>
+            <div>
+              <h3 className="font-semibold text-white">Shipping & Pallet Mastery</h3>
+              <p className="text-gray-400 text-sm">
+                Learn how to buy, receive, and flip pallets with trusted freight contacts.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-3">
+            <span className="text-[#E4B343] text-2xl">🎥</span>
+            <div>
+              <h3 className="font-semibold text-white">Streaming & Supply Kit</h3>
+              <p className="text-gray-400 text-sm">
+                Recommended gear and workflows to run high-converting Whatnot shows like a pro.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* === SIGNUP FORM === */}
       <section className="bg-[#111] border border-[#E4B343]/40 rounded-2xl p-10 w-[90%] max-w-md text-center shadow-lg mb-10">
         <h2 className="text-3xl font-bold mb-6 text-[#E4B343]">Sign Up</h2>
 
