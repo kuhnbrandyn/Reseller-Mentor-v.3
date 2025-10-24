@@ -30,7 +30,7 @@ export default function LoginPage() {
               .from("profiles")
               .select("payment_status")
               .eq("id", session.user.id)
-              .single({ head: false }); // handles no-row cases cleanly
+              .maybeSingle(); // ✅ returns null if no profile
 
             clearTimeout(timeout); // stop fallback timer if query resolves
 
@@ -42,7 +42,7 @@ export default function LoginPage() {
               return;
             }
 
-            // 🚫 Redirect unpaid
+            // 🚫 Redirect unpaid users
             if (profile.payment_status !== "paid") {
               router.replace("/signup");
               redirected = true;
@@ -99,4 +99,5 @@ export default function LoginPage() {
     </main>
   );
 }
+
 
