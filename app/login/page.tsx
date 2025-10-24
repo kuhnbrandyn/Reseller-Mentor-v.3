@@ -10,8 +10,11 @@ export default function LoginPage() {
   const router = useRouter();
 
   useEffect(() => {
-    const { data: subscription } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+    // Wrap in async function to ensure proper await/cleanup behavior
+    const handleAuthChange = async () => {
+      const {
+        data: { subscription },
+      } = supabase.auth.onAuthStateChange(async (event, session) => {
         if (event === "SIGNED_IN" && session?.user) {
           try {
             const { data: profile, error } = await supabase
@@ -22,27 +25,30 @@ export default function LoginPage() {
 
             if (error || !profile) {
               console.warn("No profile found or fetch error:", error);
-              router.push("/signup");
+              router.replace("/signup");
               return;
             }
 
             if (profile.payment_status !== "paid") {
-              router.push("/signup");
+              router.replace("/signup");
               return;
             }
 
-            router.push("/dashboard");
+            // ✅ Use replace() and small delay to allow Supabase session sync
+            setTimeout(() => router.replace("/dashboard"), 300);
           } catch (err) {
             console.error("Login check error:", err);
-            router.push("/signup");
+            router.replace("/signup");
           }
         }
-      }
-    );
+      });
 
-    return () => {
-      subscription?.subscription?.unsubscribe?.();
+      return () => {
+        subscription?.unsubscribe();
+      };
     };
+
+    handleAuthChange();
   }, [router]);
 
   return (
@@ -64,9 +70,9 @@ export default function LoginPage() {
                 colors: {
                   brand: "#E4B343",
                   brandAccent: "#d9a630",
-                  inputBackground: "#1a1a1a", // darker input box
-                  inputText: "white", // 👈 makes typed text white
-                  inputPlaceholder: "#aaa", // softer placeholder
+                  inputBackground: "#1a1a1a",
+                  inputText: "white",
+                  inputPlaceholder: "#aaa",
                 },
               },
             },
@@ -78,4 +84,3 @@ export default function LoginPage() {
     </main>
   );
 }
-
