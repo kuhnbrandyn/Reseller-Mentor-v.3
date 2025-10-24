@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabaseClient"; // ✅ fixed import path
+import { supabase } from "@/lib/supabaseClient";
 import { Auth } from "@supabase/auth-ui-react";
 import { ThemeSupa } from "@supabase/auth-ui-shared";
 
@@ -10,14 +10,38 @@ export default function LoginPage() {
   const router = useRouter();
 
   useEffect(() => {
-    // ✅ Listen for authentication changes
-    const {
-      data: subscription,
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_IN") {
-        router.push("/dashboard");
+    const { data: subscription } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (event === "SIGNED_IN" && session?.user) {
+          try {
+            // ✅ Get user's profile from Supabase
+            const { data: profile, error } = await supabase
+              .from("profiles")
+              .select("payment_status")
+              .eq("id", session.user.id)
+              .single();
+
+            if (error) {
+              console.error("Profile fetch error:", error);
+              router.push("/signup");
+              return;
+            }
+
+            // 🚫 If unpaid, redirect to signup
+            if (profile?.payment_status !== "paid") {
+              router.push("/signup");
+              return;
+            }
+
+            // ✅ Paid user → proceed to dashboard
+            router.push("/dashboard");
+          } catch (err) {
+            console.error("Login check error:", err);
+            router.push("/signup");
+          }
+        }
       }
-    });
+    );
 
     // ✅ Cleanup listener on unmount
     return () => {
@@ -55,3 +79,4 @@ export default function LoginPage() {
     </main>
   );
 }
+
