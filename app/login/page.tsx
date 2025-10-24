@@ -14,26 +14,23 @@ export default function LoginPage() {
       async (event, session) => {
         if (event === "SIGNED_IN" && session?.user) {
           try {
-            // ✅ Get user's profile from Supabase
             const { data: profile, error } = await supabase
               .from("profiles")
               .select("payment_status")
               .eq("id", session.user.id)
-              .single();
+              .maybeSingle();
 
-            if (error) {
-              console.error("Profile fetch error:", error);
+            if (error || !profile) {
+              console.warn("No profile found or fetch error:", error);
               router.push("/signup");
               return;
             }
 
-            // 🚫 If unpaid, redirect to signup
-            if (profile?.payment_status !== "paid") {
+            if (profile.payment_status !== "paid") {
               router.push("/signup");
               return;
             }
 
-            // ✅ Paid user → proceed to dashboard
             router.push("/dashboard");
           } catch (err) {
             console.error("Login check error:", err);
@@ -43,7 +40,6 @@ export default function LoginPage() {
       }
     );
 
-    // ✅ Cleanup listener on unmount
     return () => {
       subscription?.subscription?.unsubscribe?.();
     };
@@ -68,6 +64,9 @@ export default function LoginPage() {
                 colors: {
                   brand: "#E4B343",
                   brandAccent: "#d9a630",
+                  inputBackground: "#1a1a1a", // darker input box
+                  inputText: "white", // 👈 makes typed text white
+                  inputPlaceholder: "#aaa", // softer placeholder
                 },
               },
             },
