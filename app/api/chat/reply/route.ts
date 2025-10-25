@@ -1,25 +1,35 @@
 import { NextResponse } from "next/server";
 
-export const runtime = "edge";
+export const runtime = "edge"; // fast response for Slack
 
-// ✅ Debug reply handler for Slack → Site messages
 export async function POST(req: Request) {
   try {
-    const payload = await req.json();
+    const body = await req.json();
 
-    // Slack sends a challenge during verification
-    if (payload?.challenge) {
-      return NextResponse.json({ challenge: payload.challenge });
+    // Slack URL verification (needed only on setup)
+    if (body.type === "url_verification") {
+      return NextResponse.json({ challenge: body.challenge });
     }
 
-    // ✅ Log everything from Slack
-    console.log("🔹 Slack Event Received:", JSON.stringify(payload, null, 2));
+    // ✅ Handle messages sent in Slack
+    if (body.event?.type === "message" && !body.event.bot_id) {
+      const text = body.event.text;
+      const user = body.event.user;
+      const threadTs = body.event.thread_ts || body.event.ts;
 
-    // Respond to Slack quickly to avoid timeout
+      console.log("🔹 Reply received from Slack:", { text, user, threadTs });
+
+      // Send the Slack reply to your client via Server-Sent Events (SSE)
+      // We'll use the BroadcastChannel API for communication across users
+      const bc = new BroadcastChannel("reseller_mentor_chat");
+      bc.postMessage({ text, user, threadTs, from: "slack" });
+      bc.close();
+    }
+
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("❌ Slack Reply Error:", err);
-    return NextResponse.json({ error: "Bad request" }, { status: 400 });
+    console.error("❌ Slack reply handler error:", err);
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }
 
