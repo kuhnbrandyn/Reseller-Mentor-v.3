@@ -33,34 +33,42 @@ export default function ChatWidget({ context }: { context?: string }) {
           💬 Chat
         </button>
       ) : (
-        <div className="w-80 bg-[#111] border border-gray-700 rounded-2xl shadow-xl p-4">
+        <div className="w-80 bg-[#1A1A1A] border border-gray-700 rounded-2xl shadow-2xl p-4 text-gray-100">
           <div className="flex justify-between items-center mb-3">
-            <p className="font-semibold text-[#E4B343]">
+            <p className="font-semibold text-[#E4B343] text-lg">
               Reseller Mentor Support
             </p>
-            <button onClick={() => setOpen(false)}>✕</button>
+            <button
+              onClick={() => setOpen(false)}
+              className="text-gray-400 hover:text-gray-200 transition"
+            >
+              ✕
+            </button>
           </div>
 
           <textarea
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             placeholder="Type your message..."
-            className="w-full p-2 rounded-md bg-gray-800 text-gray-200 border border-gray-700 focus:outline-none"
+            className="w-full p-2 rounded-md bg-[#111] text-gray-200 placeholder-gray-500 border border-gray-600 focus:outline-none focus:ring-1 focus:ring-[#E4B343]"
             rows={3}
           />
 
           <button
             onClick={sendMessage}
-            className="mt-2 w-full bg-[#E4B343] text-black py-2 rounded-md font-semibold hover:opacity-90"
+            className="mt-3 w-full bg-[#E4B343] text-black py-2 rounded-md font-semibold hover:opacity-90 transition"
           >
             Send
           </button>
 
           {sent && (
-            <p className="text-green-400 text-sm mt-2">Message sent ✅</p>
+            <p className="text-green-400 text-sm mt-2 text-center">
+              Message sent ✅
+            </p>
           )}
         </div>
       )}
     </div>
   );
 }
+
