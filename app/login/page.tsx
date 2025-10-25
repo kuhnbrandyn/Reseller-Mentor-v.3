@@ -16,7 +16,7 @@ export default function LoginPage() {
           let redirected = false;
 
           try {
-            // ⏱ Add a manual timeout safety net (prevents infinite hang)
+            // ⏱ Safety timeout to avoid hanging
             const timeout = setTimeout(() => {
               if (!redirected) {
                 console.warn("Timeout: redirecting to signup fallback");
@@ -30,9 +30,9 @@ export default function LoginPage() {
               .from("profiles")
               .select("payment_status")
               .eq("id", session.user.id)
-              .maybeSingle(); // ✅ returns null if no profile
+              .maybeSingle();
 
-            clearTimeout(timeout); // stop fallback timer if query resolves
+            clearTimeout(timeout);
 
             // 🚫 Redirect if no profile or fetch error
             if (error || !profile) {
@@ -42,9 +42,10 @@ export default function LoginPage() {
               return;
             }
 
-            // 🚫 Redirect unpaid users
+            // 🚫 Redirect unpaid users to Terms & Conditions
             if (profile.payment_status !== "paid") {
-              router.replace("/signup");
+              console.warn("Unpaid user detected — redirecting to Terms");
+              router.replace(`/terms?email=${encodeURIComponent(session.user.email)}`);
               redirected = true;
               return;
             }
@@ -99,5 +100,3 @@ export default function LoginPage() {
     </main>
   );
 }
-
-
