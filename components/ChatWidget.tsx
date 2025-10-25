@@ -13,6 +13,7 @@ export default function ChatWidget({ context }: { context?: string }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
 
   useEffect(() => {
+    // 🔹 Listen to server-sent events for potential future live integrations
     const evtSource = new EventSource("/api/chat/reply");
 
     evtSource.onmessage = (event) => {
@@ -21,7 +22,10 @@ export default function ChatWidget({ context }: { context?: string }) {
         if (data.type === "support_reply") {
           const userThread = localStorage.getItem("thread_ts");
           if (userThread && data.thread_ts === userThread) {
-            setMessages((prev) => [...prev, { from: "support", text: data.message }]);
+            setMessages((prev) => [
+              ...prev,
+              { from: "support", text: data.message },
+            ]);
           }
         }
       } catch (e) {
@@ -35,7 +39,21 @@ export default function ChatWidget({ context }: { context?: string }) {
       setTimeout(() => new EventSource("/api/chat/reply"), 3000);
     };
 
-    return () => evtSource.close();
+    // 🔹 Listen for Slack replies broadcasted from the server
+    const bc = new BroadcastChannel("reseller_mentor_chat");
+    bc.onmessage = (event) => {
+      if (event.data.from === "slack") {
+        setMessages((prev) => [
+          ...prev,
+          { from: "support", text: event.data.text },
+        ]);
+      }
+    };
+
+    return () => {
+      evtSource.close();
+      bc.close();
+    };
   }, []);
 
   const sendMessage = async () => {
@@ -49,11 +67,17 @@ export default function ChatWidget({ context }: { context?: string }) {
       const res = await fetch("/api/chat/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message, context, email, thread_ts: threadTs || null }),
+        body: JSON.stringify({
+          message,
+          context,
+          email,
+          thread_ts: threadTs || null,
+        }),
       });
 
       const data = await res.json();
-      if (data.thread_ts && !threadTs) localStorage.setItem("thread_ts", data.thread_ts);
+      if (data.thread_ts && !threadTs)
+        localStorage.setItem("thread_ts", data.thread_ts);
 
       if (res.ok) {
         setMessages((prev) => [...prev, { from: "user", text: message }]);
@@ -81,14 +105,17 @@ export default function ChatWidget({ context }: { context?: string }) {
 
       {open && (
         <div className="fixed bottom-6 right-6 w-80 bg-[#111] border border-gray-800 rounded-2xl shadow-xl flex flex-col overflow-hidden z-50">
+          {/* Header */}
           <div className="flex justify-between items-center px-4 py-3 bg-[#E4B343] text-black font-semibold">
             <span>Reseller Mentor Support</span>
             <button onClick={() => setOpen(false)}>✕</button>
           </div>
 
+          {/* Messages */}
           <div className="flex-1 p-4 text-sm overflow-y-auto bg-black">
             <p className="italic text-gray-400 mb-3">
-              Hi there 👋<br />Send us a message and our team will reply shortly.
+              Hi there 👋<br />
+              Send us a message and our team will reply shortly.
             </p>
             {messages.map((msg, i) => (
               <div
@@ -104,6 +131,7 @@ export default function ChatWidget({ context }: { context?: string }) {
             ))}
           </div>
 
+          {/* Input */}
           <div className="p-3 bg-[#111] border-t border-gray-800">
             <textarea
               value={message}
