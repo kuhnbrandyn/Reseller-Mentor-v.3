@@ -12,11 +12,19 @@ export default function LoginPage() {
   useEffect(() => {
     const { data: subscription } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        // 🧠 Prevent redirect loops if user is already on signup or terms
+        if (
+          window.location.pathname === "/signup" ||
+          window.location.pathname === "/terms"
+        ) {
+          return;
+        }
+
         if (event === "SIGNED_IN" && session?.user) {
           let redirected = false;
 
           try {
-            // ⏱ Safety timeout to avoid hanging
+            // ⏱ Safety timeout
             const timeout = setTimeout(() => {
               if (!redirected) {
                 console.warn("Timeout: redirecting to signup fallback");
@@ -25,7 +33,7 @@ export default function LoginPage() {
               }
             }, 1200);
 
-            // ✅ Fetch profile safely
+            // ✅ Fetch profile
             const { data: profile, error } = await supabase
               .from("profiles")
               .select("payment_status")
@@ -34,7 +42,7 @@ export default function LoginPage() {
 
             clearTimeout(timeout);
 
-            // 🚫 Redirect if no profile or fetch error
+            // 🚫 No profile or error → send to signup
             if (error || !profile) {
               console.warn("No profile found or fetch error:", error);
               router.replace("/signup");
@@ -42,7 +50,7 @@ export default function LoginPage() {
               return;
             }
 
-            // 🚫 Redirect unpaid users to Terms & Conditions
+            // 🚫 Unpaid users → Terms & Conditions
             if (profile.payment_status !== "paid") {
               console.warn("Unpaid user detected — redirecting to Terms");
               router.replace(`/terms?email=${encodeURIComponent(session.user.email)}`);
@@ -50,7 +58,7 @@ export default function LoginPage() {
               return;
             }
 
-            // ✅ Paid user → dashboard
+            // ✅ Paid users → Dashboard
             router.replace("/dashboard");
             redirected = true;
           } catch (err) {
