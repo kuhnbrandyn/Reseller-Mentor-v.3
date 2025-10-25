@@ -1,35 +1,65 @@
 import { NextResponse } from "next/server";
 
-export const runtime = "edge"; // fast response for Slack
+let clients: any[] = [];
 
+export const runtime = "edge"; // works fine for Vercel SSE
+
+// --- SSE Connection ---
+export async function GET() {
+  return new Response(
+    new ReadableStream({
+      start(controller) {
+        const encoder = new TextEncoder();
+        const client = { controller };
+        clients.push(client);
+
+        // Keep-alive ping every 20 seconds
+        const interval = setInterval(() => {
+          controller.enqueue(encoder.encode(":\n\n"));
+        }, 20000);
+
+        controller.enqueue(encoder.encode("event: connected\ndata: ok\n\n"));
+
+        // Remove client on close
+        const close = () => {
+          clearInterval(interval);
+          clients = clients.filter((c) => c !== client);
+        };
+        controller.closed.then(close);
+      },
+    }),
+    {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+      },
+    }
+  );
+}
+
+// --- Slack Event Handler ---
 export async function POST(req: Request) {
-  try {
-    const body = await req.json();
+  const body = await req.json();
 
-    // Slack URL verification (needed only on setup)
-    if (body.type === "url_verification") {
-      return NextResponse.json({ challenge: body.challenge });
-    }
-
-    // ✅ Handle messages sent in Slack
-    if (body.event?.type === "message" && !body.event.bot_id) {
-      const text = body.event.text;
-      const user = body.event.user;
-      const threadTs = body.event.thread_ts || body.event.ts;
-
-      console.log("🔹 Reply received from Slack:", { text, user, threadTs });
-
-      // Send the Slack reply to your client via Server-Sent Events (SSE)
-      // We'll use the BroadcastChannel API for communication across users
-      const bc = new BroadcastChannel("reseller_mentor_chat");
-      bc.postMessage({ text, user, threadTs, from: "slack" });
-      bc.close();
-    }
-
-    return NextResponse.json({ ok: true });
-  } catch (err) {
-    console.error("❌ Slack reply handler error:", err);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+  // Slack verification (on setup)
+  if (body.type === "url_verification") {
+    return NextResponse.json({ challenge: body.challenge });
   }
+
+  // Regular message from Slack (reply)
+  if (body.event?.type === "message" && !body.event.bot_id) {
+    const message = {
+      type: "support_reply",
+      message: body.event.text,
+      thread_ts: body.event.thread_ts || body.event.ts,
+    };
+
+    // Broadcast to all connected browsers
+    const data = `data: ${JSON.stringify(message)}\n\n`;
+    clients.forEach((c) => c.controller.enqueue(new TextEncoder().encode(data)));
+  }
+
+  return NextResponse.json({ ok: true });
 }
 
