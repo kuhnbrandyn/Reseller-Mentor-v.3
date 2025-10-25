@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
-import crypto from "crypto";
 
-export const runtime = "edge"; // ✅ required for long-lived connections
+export const runtime = "edge"; // ✅ Edge-compatible
 
 let clients: { id: string; send: (data: any) => void }[] = [];
 
@@ -16,9 +15,7 @@ export async function GET() {
       clients.push({ id, send });
       send({ type: "connected", id });
 
-      const interval = setInterval(() => {
-        send({ type: "ping" });
-      }, 15000);
+      const interval = setInterval(() => send({ type: "ping" }), 15000);
 
       const close = () => {
         clearInterval(interval);
@@ -26,10 +23,8 @@ export async function GET() {
       };
 
       controller.enqueue(`data: ${JSON.stringify({ connected: true })}\n\n`);
-
       return () => close();
     },
-    cancel() {},
   });
 
   return new Response(stream, {
@@ -41,18 +36,57 @@ export async function GET() {
   });
 }
 
+// ✅ Helper for Slack signature verification using Web Crypto
+async function verifySlackSignature({
+  body,
+  timestamp,
+  signature,
+  secret,
+}: {
+  body: string;
+  timestamp: string | null;
+  signature: string | null;
+  secret: string;
+}) {
+  if (!timestamp || !signature) return false;
+
+  const baseString = `v0:${timestamp}:${body}`;
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const signatureBuffer = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    encoder.encode(baseString)
+  );
+  const computed =
+    "v0=" +
+    Array.from(new Uint8Array(signatureBuffer))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+
+  return computed === signature;
+}
+
 export async function POST(req: Request) {
   const rawBody = await req.text();
   const timestamp = req.headers.get("x-slack-request-timestamp");
   const signature = req.headers.get("x-slack-signature");
   const secret = process.env.SLACK_SIGNING_SECRET!;
 
-  // Verify Slack request
-  const base = `v0:${timestamp}:${rawBody}`;
-  const hash =
-    "v0=" + crypto.createHmac("sha256", secret).update(base).digest("hex");
-  if (hash !== signature) {
-    return NextResponse.json({ error: "invalid signature" }, { status: 403 });
+  const isValid = await verifySlackSignature({
+    body: rawBody,
+    timestamp,
+    signature,
+    secret,
+  });
+  if (!isValid) {
+    return NextResponse.json({ error: "Invalid signature" }, { status: 403 });
   }
 
   const payload = JSON.parse(rawBody);
@@ -63,7 +97,6 @@ export async function POST(req: Request) {
   const event = payload.event;
   if (event && event.type === "message" && event.thread_ts && !event.bot_id) {
     console.log("💬 Reply from Slack:", event.text);
-    // broadcast to all connected clients
     clients.forEach((client) =>
       client.send({
         type: "support_reply",
@@ -75,3 +108,4 @@ export async function POST(req: Request) {
 
   return NextResponse.json({ ok: true });
 }
+
