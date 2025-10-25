@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 
+export const runtime = "edge"; // required for Vercel
+
 let clients: any[] = [];
 
-export const runtime = "edge"; // works fine for Vercel SSE
+// === 1. SSE connection handler ===
+export async function GET(req: Request) {
+  const { signal } = req; // supports abort (close) event
 
-// --- SSE Connection ---
-export async function GET() {
   return new Response(
     new ReadableStream({
       start(controller) {
@@ -13,19 +15,19 @@ export async function GET() {
         const client = { controller };
         clients.push(client);
 
-        // Keep-alive ping every 20 seconds
+        // Keep connection alive every 20s
         const interval = setInterval(() => {
           controller.enqueue(encoder.encode(":\n\n"));
         }, 20000);
 
-        controller.enqueue(encoder.encode("event: connected\ndata: ok\n\n"));
-
-        // Remove client on close
-        const close = () => {
+        // If user disconnects, cleanup
+        signal.addEventListener("abort", () => {
           clearInterval(interval);
           clients = clients.filter((c) => c !== client);
-        };
-        controller.closed.then(close);
+        });
+
+        // Confirm connection
+        controller.enqueue(encoder.encode("event: connected\ndata: ok\n\n"));
       },
     }),
     {
@@ -38,16 +40,16 @@ export async function GET() {
   );
 }
 
-// --- Slack Event Handler ---
+// === 2. Slack event handler ===
 export async function POST(req: Request) {
   const body = await req.json();
 
-  // Slack verification (on setup)
+  // Slack verification (first setup)
   if (body.type === "url_verification") {
     return NextResponse.json({ challenge: body.challenge });
   }
 
-  // Regular message from Slack (reply)
+  // Handle Slack replies (non-bot messages)
   if (body.event?.type === "message" && !body.event.bot_id) {
     const message = {
       type: "support_reply",
@@ -55,7 +57,6 @@ export async function POST(req: Request) {
       thread_ts: body.event.thread_ts || body.event.ts,
     };
 
-    // Broadcast to all connected browsers
     const data = `data: ${JSON.stringify(message)}\n\n`;
     clients.forEach((c) => c.controller.enqueue(new TextEncoder().encode(data)));
   }
