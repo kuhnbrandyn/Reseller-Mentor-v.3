@@ -19,7 +19,7 @@ export default function SignUpPage() {
     setLoading(true);
 
     try {
-      // ✅ STEP 1: Check if user exists in profiles
+      // ✅ STEP 1: Check if profile exists
       const { data: existingProfile, error: profileError } = await supabase
         .from("profiles")
         .select("payment_status")
@@ -28,7 +28,6 @@ export default function SignUpPage() {
 
       if (profileError) console.warn("Profile lookup error:", profileError);
 
-      // ✅ If a profile exists → handle redirect logic
       if (existingProfile) {
         if (existingProfile.payment_status === "paid") {
           alert("User is already an active member please login.");
@@ -36,31 +35,29 @@ export default function SignUpPage() {
           router.push("/login");
           return;
         } else {
-          // Unpaid or incomplete profile
           setLoading(false);
           router.push(`/terms?email=${encodeURIComponent(email.trim())}`);
           return;
         }
       }
 
-      // ✅ STEP 2: Check if email exists in Supabase Auth users
-      const { data: { users }, error: userError } = await supabase.auth.admin.listUsers();
+      // ✅ STEP 2: Check if user already exists in Auth
+      const { data: adminData, error: userError } = await supabase.auth.admin.listUsers();
 
-      if (userError) {
-        console.warn("User lookup error:", userError);
-      } else {
-        const existingAuthUser = users?.find(
+      if (!userError && adminData?.users) {
+        const users = adminData.users as { email?: string }[];
+        const existingAuthUser = users.find(
           (u) => u.email?.toLowerCase() === email.trim().toLowerCase()
         );
+
         if (existingAuthUser) {
-          // User exists in auth but not in profiles → redirect to terms
           setLoading(false);
           router.push(`/terms?email=${encodeURIComponent(email.trim())}`);
           return;
         }
       }
 
-      // ✅ STEP 3: New signup (user doesn’t exist yet)
+      // ✅ STEP 3: New signup (does not exist anywhere)
       if (promoCode === "ADMINFREE" || promoCode === "TESTACCESS") {
         alert("Promo accepted! Redirecting to dashboard...");
         router.push("/dashboard");
@@ -73,7 +70,6 @@ export default function SignUpPage() {
       });
 
       if (error) {
-        // If it's a "User already registered" error, redirect unpaid flow
         if (error.message.includes("User already registered")) {
           setLoading(false);
           router.push(`/terms?email=${encodeURIComponent(email.trim())}`);
@@ -253,28 +249,6 @@ export default function SignUpPage() {
             Log In
           </a>
         </p>
-      </section>
-
-      {/* === TESTIMONIALS === */}
-      <section className="max-w-5xl w-full px-6 grid md:grid-cols-3 gap-6 text-center mb-16">
-        <div className="bg-[#111] p-6 rounded-xl border border-gray-800 shadow-md">
-          <p className="italic text-gray-400">
-            “I scaled my Whatnot sales 2x using tips from Reseller Mentor AI!”
-          </p>
-          <p className="text-[#E4B343] mt-3 font-semibold">— Amanda R.</p>
-        </div>
-        <div className="bg-[#111] p-6 rounded-xl border border-gray-800 shadow-md">
-          <p className="italic text-gray-400">
-            “The Supplier Vault saved me weeks of sourcing time.”
-          </p>
-          <p className="text-[#E4B343] mt-3 font-semibold">— Chris M.</p>
-        </div>
-        <div className="bg-[#111] p-6 rounded-xl border border-gray-800 shadow-md">
-          <p className="italic text-gray-400">
-            “Worth every penny. Finally a mentor who gets reselling!”
-          </p>
-          <p className="text-[#E4B343] mt-3 font-semibold">— Jenna L.</p>
-        </div>
       </section>
 
       {/* === WAITLIST === */}
