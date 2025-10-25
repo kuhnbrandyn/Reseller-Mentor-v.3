@@ -19,7 +19,7 @@ export default function SignUpPage() {
     setLoading(true);
 
     try {
-      // ✅ STEP 1: Check if profile already exists
+      // ✅ STEP 1: Check if profile exists
       const { data: existingProfile, error: profileError } = await supabase
         .from("profiles")
         .select("payment_status")
@@ -41,13 +41,15 @@ export default function SignUpPage() {
         }
       }
 
-      // ✅ STEP 2: Check if user exists in Auth
+      // ✅ STEP 2: Check if user already exists in Auth
       const { data: adminData, error: userError } = await supabase.auth.admin.listUsers();
+
       if (!userError && adminData?.users) {
         const users = adminData.users as { email?: string }[];
         const existingAuthUser = users.find(
           (u) => u.email?.toLowerCase() === email.trim().toLowerCase()
         );
+
         if (existingAuthUser) {
           setLoading(false);
           router.push(`/terms?email=${encodeURIComponent(email.trim())}`);
@@ -55,7 +57,7 @@ export default function SignUpPage() {
         }
       }
 
-      // ✅ STEP 3: New signup flow
+      // ✅ STEP 3: New signup (does not exist anywhere)
       if (promoCode === "ADMINFREE" || promoCode === "TESTACCESS") {
         alert("Promo accepted! Redirecting to dashboard...");
         router.push("/dashboard");
@@ -124,7 +126,6 @@ export default function SignUpPage() {
           ongoing supplier access, and real growth strategies built by sellers for sellers.
         </p>
 
-        {/* === PRICE CUT VISUAL === */}
         <div className="inline-block bg-[#111] border border-[#E4B343]/40 px-8 py-5 rounded-2xl shadow-lg mb-10">
           <p className="text-gray-400 text-sm line-through">Originally $1,200</p>
           <p className="text-4xl font-bold text-[#E4B343] mt-1">
@@ -217,6 +218,7 @@ export default function SignUpPage() {
           onChange={(e) => setEmail(e.target.value)}
           className="w-full mb-4 px-4 py-3 rounded-lg border border-gray-700 bg-transparent text-white focus:border-[#E4B343] focus:outline-none"
         />
+
         <input
           type="password"
           placeholder="Create a password"
@@ -224,6 +226,7 @@ export default function SignUpPage() {
           onChange={(e) => setPassword(e.target.value)}
           className="w-full mb-4 px-4 py-3 rounded-lg border border-gray-700 bg-transparent text-white focus:border-[#E4B343] focus:outline-none"
         />
+
         <input
           type="text"
           placeholder="Promo code (optional)"
@@ -299,4 +302,5 @@ export default function SignUpPage() {
     </main>
   );
 }
+
 
