@@ -19,38 +19,48 @@ export default function SignUpPage() {
     setLoading(true);
 
     try {
-      // ✅ Check if user already exists in profiles
-      const { data: existingProfile, error: existingError } = await supabase
+      // ✅ STEP 1: Check if user exists in profiles
+      const { data: existingProfile, error: profileError } = await supabase
         .from("profiles")
         .select("payment_status")
         .eq("email", email.trim())
         .maybeSingle();
 
-      if (existingError) console.warn("Profile lookup error:", existingError);
+      if (profileError) console.warn("Profile lookup error:", profileError);
 
+      // ✅ If a profile exists → handle redirect logic
       if (existingProfile) {
-        // 🟢 PAID user → alert and redirect to login
         if (existingProfile.payment_status === "paid") {
           alert("User is already an active member please login.");
           setLoading(false);
           router.push("/login");
           return;
-        }
-
-        // 🟡 UNPAID user → redirect to terms (no alert)
-        if (
-          existingProfile.payment_status === "unpaid" ||
-          existingProfile.payment_status === null ||
-          existingProfile.payment_status === "" ||
-          existingProfile.payment_status === undefined
-        ) {
+        } else {
+          // Unpaid or incomplete profile
           setLoading(false);
           router.push(`/terms?email=${encodeURIComponent(email.trim())}`);
           return;
         }
       }
 
-      // ✅ Continue with standard signup flow
+      // ✅ STEP 2: Check if email exists in Supabase Auth users
+      const { data: { users }, error: userError } = await supabase.auth.admin.listUsers();
+
+      if (userError) {
+        console.warn("User lookup error:", userError);
+      } else {
+        const existingAuthUser = users?.find(
+          (u) => u.email?.toLowerCase() === email.trim().toLowerCase()
+        );
+        if (existingAuthUser) {
+          // User exists in auth but not in profiles → redirect to terms
+          setLoading(false);
+          router.push(`/terms?email=${encodeURIComponent(email.trim())}`);
+          return;
+        }
+      }
+
+      // ✅ STEP 3: New signup (user doesn’t exist yet)
       if (promoCode === "ADMINFREE" || promoCode === "TESTACCESS") {
         alert("Promo accepted! Redirecting to dashboard...");
         router.push("/dashboard");
@@ -63,6 +73,13 @@ export default function SignUpPage() {
       });
 
       if (error) {
+        // If it's a "User already registered" error, redirect unpaid flow
+        if (error.message.includes("User already registered")) {
+          setLoading(false);
+          router.push(`/terms?email=${encodeURIComponent(email.trim())}`);
+          return;
+        }
+
         alert(error.message);
         setLoading(false);
         return;
@@ -113,7 +130,6 @@ export default function SignUpPage() {
           ongoing supplier access, and real growth strategies built by sellers for sellers.
         </p>
 
-        {/* === PRICE CUT VISUAL === */}
         <div className="inline-block bg-[#111] border border-[#E4B343]/40 px-8 py-5 rounded-2xl shadow-lg mb-10">
           <p className="text-gray-400 text-sm line-through">Originally $1,200</p>
           <p className="text-4xl font-bold text-[#E4B343] mt-1">
@@ -206,6 +222,7 @@ export default function SignUpPage() {
           onChange={(e) => setEmail(e.target.value)}
           className="w-full mb-4 px-4 py-3 rounded-lg border border-gray-700 bg-transparent text-white focus:border-[#E4B343] focus:outline-none"
         />
+
         <input
           type="password"
           placeholder="Create a password"
@@ -213,6 +230,7 @@ export default function SignUpPage() {
           onChange={(e) => setPassword(e.target.value)}
           className="w-full mb-4 px-4 py-3 rounded-lg border border-gray-700 bg-transparent text-white focus:border-[#E4B343] focus:outline-none"
         />
+
         <input
           type="text"
           placeholder="Promo code (optional)"
@@ -267,6 +285,7 @@ export default function SignUpPage() {
         <p className="text-gray-300 mb-4">
           Join the waitlist and be first to test beta tools and supplier updates.
         </p>
+
         <div className="flex flex-col md:flex-row justify-center gap-4 items-center">
           <input
             type="email"
@@ -287,5 +306,4 @@ export default function SignUpPage() {
     </main>
   );
 }
-
 
