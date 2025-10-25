@@ -1,7 +1,11 @@
 "use client";
 import { useState } from "react";
 
-export default function ChatWidget() {
+interface ChatWidgetProps {
+  context?: string;
+}
+
+export default function ChatWidget({ context }: ChatWidgetProps) {
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [sent, setSent] = useState(false);
@@ -11,71 +15,81 @@ export default function ChatWidget() {
     if (!message.trim()) return;
     setLoading(true);
 
-    const email = localStorage.getItem("user_email") || "guest_user";
+    const email = localStorage.getItem("user_email") || "guest";
 
-    const res = await fetch("/api/chat/send", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message, email, context: "Website chat" }),
-    });
+    try {
+      const res = await fetch("/api/chat/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message, context, email }),
+      });
 
-    setLoading(false);
-    if (res.ok) {
-      setSent(true);
-      setMessage("");
-      setTimeout(() => setSent(false), 4000);
-    } else {
-      alert("Message failed. Please try again.");
+      if (res.ok) {
+        setSent(true);
+        setMessage("");
+        setTimeout(() => setSent(false), 3000);
+      } else {
+        alert("⚠️ Message failed to send. Please try again.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("⚠️ Error connecting to support.");
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="fixed bottom-6 right-6 z-50">
-      {!open ? (
+    <>
+      {/* 💬 Floating Chat Bubble */}
+      {!open && (
         <button
           onClick={() => setOpen(true)}
-          className="bg-[#E4B343] text-black font-semibold rounded-full px-5 py-3 shadow-lg flex items-center gap-2 hover:bg-[#f1c75a]"
+          className="fixed bottom-6 left-6 bg-[#E4B343] text-black px-4 py-2 rounded-t-xl rounded-br-xl shadow-lg font-semibold flex items-center space-x-2 hover:bg-[#f2c85a] transition-all z-50"
         >
-          💬 Chat
+          <span>💬</span>
+          <span>Chat</span>
         </button>
-      ) : (
-        <div className="bg-[#111] border border-gray-700 rounded-2xl shadow-2xl w-80 h-96 flex flex-col overflow-hidden">
-          <div className="bg-[#E4B343] text-black font-semibold px-4 py-2 flex justify-between items-center">
+      )}
+
+      {/* 🪟 Chat Window */}
+      {open && (
+        <div className="fixed bottom-6 left-6 w-80 bg-[#111] border border-gray-700 rounded-2xl shadow-2xl z-50 overflow-hidden">
+          <div className="flex justify-between items-center bg-[#E4B343] text-black font-semibold px-4 py-2">
             <span>Reseller Mentor Support</span>
-            <button onClick={() => setOpen(false)} className="text-black">×</button>
+            <button
+              onClick={() => setOpen(false)}
+              className="text-black hover:text-gray-700"
+            >
+              ✕
+            </button>
           </div>
 
-          <div className="flex-1 p-3 text-sm text-gray-300 overflow-y-auto">
-            {sent ? (
-              <p className="text-green-400 font-medium">
-                ✅ Message received! We'll respond shortly.
-              </p>
-            ) : (
-              <p className="text-gray-500">
-                👋 Have a question? Send us a message and we’ll get back to you soon.
-              </p>
-            )}
-          </div>
-
-          <div className="p-3 border-t border-gray-700 bg-[#000]">
+          <div className="p-4">
             <textarea
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               placeholder="Type your message..."
-              className="w-full p-2 bg-[#111] text-white border border-gray-600 rounded-md resize-none focus:outline-none focus:border-[#E4B343]"
-              rows={2}
+              className="w-full h-24 p-2 rounded-lg bg-black border border-gray-700 text-white resize-none focus:outline-none focus:ring-1 focus:ring-[#E4B343]"
             />
+
             <button
               onClick={sendMessage}
               disabled={loading}
-              className="mt-2 w-full bg-[#E4B343] text-black font-semibold py-2 rounded-md hover:bg-[#f1c75a]"
+              className="w-full mt-3 bg-[#E4B343] text-black font-semibold py-2 rounded-lg hover:bg-[#f2c85a] transition-all disabled:opacity-50"
             >
               {loading ? "Sending..." : "Send"}
             </button>
+
+            {sent && (
+              <p className="text-green-400 text-sm text-center mt-2">
+                ✅ Message received — we’ll reply shortly!
+              </p>
+            )}
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
 
