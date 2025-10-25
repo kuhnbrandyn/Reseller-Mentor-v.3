@@ -1,5 +1,4 @@
 "use client";
-
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
@@ -19,7 +18,7 @@ export default function SignUpPage() {
     setLoading(true);
 
     try {
-      // ✅ Check if profile already exists
+      // ✅ Check if a profile already exists for this email
       const { data: existingProfile, error: existingError } = await supabase
         .from("profiles")
         .select("payment_status")
@@ -42,13 +41,13 @@ export default function SignUpPage() {
         // 🚫 If user exists but unpaid
         if (existingProfile.payment_status !== "paid") {
           alert("You already started signing up. Redirecting you to finish payment...");
-          router.push(`/terms?email=${encodeURIComponent(email.trim())}`);
           setLoading(false);
+          router.push(`/terms?email=${encodeURIComponent(email.trim())}`);
           return;
         }
       }
 
-      // ✅ Continue as normal for new users or no profile
+      // ✅ Continue existing signup flow
       if (promoCode === "ADMINFREE" || promoCode === "TESTACCESS") {
         alert("Promo accepted! Redirecting to dashboard...");
         router.push("/dashboard");
@@ -204,7 +203,6 @@ export default function SignUpPage() {
           onChange={(e) => setEmail(e.target.value)}
           className="w-full mb-4 px-4 py-3 rounded-lg border border-gray-700 bg-transparent text-white focus:border-[#E4B343] focus:outline-none"
         />
-
         <input
           type="password"
           placeholder="Create a password"
@@ -212,7 +210,6 @@ export default function SignUpPage() {
           onChange={(e) => setPassword(e.target.value)}
           className="w-full mb-4 px-4 py-3 rounded-lg border border-gray-700 bg-transparent text-white focus:border-[#E4B343] focus:outline-none"
         />
-
         <input
           type="text"
           placeholder="Promo code (optional)"
@@ -235,6 +232,54 @@ export default function SignUpPage() {
             Log In
           </a>
         </p>
+      </section>
+
+      {/* === TESTIMONIALS === */}
+      <section className="max-w-5xl w-full px-6 grid md:grid-cols-3 gap-6 text-center mb-16">
+        <div className="bg-[#111] p-6 rounded-xl border border-gray-800 shadow-md">
+          <p className="italic text-gray-400">
+            “I scaled my Whatnot sales 2x using tips from Reseller Mentor AI!”
+          </p>
+          <p className="text-[#E4B343] mt-3 font-semibold">— Amanda R.</p>
+        </div>
+        <div className="bg-[#111] p-6 rounded-xl border border-gray-800 shadow-md">
+          <p className="italic text-gray-400">
+            “The Supplier Vault saved me weeks of sourcing time.”
+          </p>
+          <p className="text-[#E4B343] mt-3 font-semibold">— Chris M.</p>
+        </div>
+        <div className="bg-[#111] p-6 rounded-xl border border-gray-800 shadow-md">
+          <p className="italic text-gray-400">
+            “Worth every penny. Finally a mentor who gets reselling!”
+          </p>
+          <p className="text-[#E4B343] mt-3 font-semibold">— Jenna L.</p>
+        </div>
+      </section>
+
+      {/* === WAITLIST === */}
+      <section className="w-full bg-black py-12 text-center border-t border-[#E4B343]/30">
+        <h3 className="text-2xl font-semibold mb-4 text-[#E4B343]">
+          Want early access to new AI features?
+        </h3>
+        <p className="text-gray-300 mb-4">
+          Join the waitlist and be first to test beta tools and supplier updates.
+        </p>
+        <div className="flex flex-col md:flex-row justify-center gap-4 items-center">
+          <input
+            type="email"
+            placeholder="Enter your email"
+            value={waitlistEmail}
+            onChange={(e) => setWaitlistEmail(e.target.value)}
+            className="px-4 py-3 rounded-lg border border-gray-700 bg-transparent text-white focus:border-[#E4B343] focus:outline-none w-72"
+          />
+          <button
+            onClick={handleWaitlistJoin}
+            disabled={joiningWaitlist}
+            className="bg-[#E4B343] text-black px-6 py-3 rounded-lg font-semibold hover:bg-[#d9a630] transition"
+          >
+            {joiningWaitlist ? "Joining..." : "Join Waitlist"}
+          </button>
+        </div>
       </section>
     </main>
   );
