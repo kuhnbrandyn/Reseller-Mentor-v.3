@@ -30,19 +30,16 @@ export default function SignUpPage() {
       }
 
       if (existingProfile) {
-        // 🚫 If user exists and is paid
         if (existingProfile.payment_status === "paid") {
+          // 🚫 Paid users — block signup, ask them to log in
           alert("This email already has an active membership. Please log in instead.");
           setLoading(false);
           router.push("/login");
           return;
-        }
-
-        // 🚫 If user exists but unpaid
-        if (existingProfile.payment_status !== "paid") {
-          alert("You already started signing up. Redirecting you to finish payment...");
-          setLoading(false);
+        } else {
+          // 🟡 Unpaid users — resume payment flow
           router.push(`/terms?email=${encodeURIComponent(email.trim())}`);
+          setLoading(false);
           return;
         }
       }
@@ -284,4 +281,5 @@ export default function SignUpPage() {
     </main>
   );
 }
+
 
