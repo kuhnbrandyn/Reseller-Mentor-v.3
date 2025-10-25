@@ -1,27 +1,30 @@
 import { NextResponse } from "next/server";
-import { WebClient } from "@slack/web-api";
-
-const slack = new WebClient(process.env.SLACK_BOT_TOKEN);
+import crypto from "crypto";
 
 export async function POST(req: Request) {
-  try {
-    const { message, context, email, thread_ts } = await req.json();
-    const channel = process.env.SLACK_SUPPORT_CHANNEL!;
-    const prefix = `💬 New Chat (${context})\n📧 ${email}\n`;
+  const rawBody = await req.text();
+  const timestamp = req.headers.get("x-slack-request-timestamp");
+  const signature = req.headers.get("x-slack-signature");
+  const secret = process.env.SLACK_SIGNING_SECRET!;
 
-    // if thread_ts exists → reply in same thread
-    const res = await slack.chat.postMessage({
-      channel,
-      text: thread_ts ? message : prefix + message,
-      thread_ts: thread_ts || undefined,
-    });
-
-    return NextResponse.json({
-      ok: true,
-      thread_ts: res.ts,
-    });
-  } catch (err) {
-    console.error("❌ Slack send failed:", err);
-    return NextResponse.json({ ok: false, error: "Slack send failed" });
+  // verify signature
+  const base = `v0:${timestamp}:${rawBody}`;
+  const hash =
+    "v0=" + crypto.createHmac("sha256", secret).update(base).digest("hex");
+  if (hash !== signature) {
+    return NextResponse.json({ error: "invalid signature" }, { status: 403 });
   }
+
+  const payload = JSON.parse(rawBody);
+
+  if (payload.type === "url_verification") {
+    return new Response(payload.challenge, { status: 200 });
+  }
+
+  const event = payload.event;
+  if (event && event.type === "message" && event.thread_ts) {
+    console.log(`📩 Slack reply for thread ${event.thread_ts}: ${event.text}`);
+  }
+
+  return NextResponse.json({ ok: true });
 }
