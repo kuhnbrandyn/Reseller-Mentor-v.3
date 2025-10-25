@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { Auth } from "@supabase/auth-ui-react";
@@ -8,6 +8,7 @@ import { ThemeSupa } from "@supabase/auth-ui-shared";
 
 export default function LoginPage() {
   const router = useRouter();
+  const hasHandledInitialSession = useRef(false); // 🧠 Prevents duplicate run on cached sessions
 
   useEffect(() => {
     const { data: subscription } = supabase.auth.onAuthStateChange(
@@ -16,7 +17,12 @@ export default function LoginPage() {
         if (
           window.location.pathname === "/signup" ||
           window.location.pathname === "/terms"
-        ) {
+        )
+          return;
+
+        // 🧠 Skip first automatic session restoration on load
+        if (!hasHandledInitialSession.current) {
+          hasHandledInitialSession.current = true;
           return;
         }
 
