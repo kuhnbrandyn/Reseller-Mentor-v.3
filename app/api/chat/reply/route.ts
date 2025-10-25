@@ -8,7 +8,21 @@ export async function POST(req: Request) {
     const signature = req.headers.get("x-slack-signature");
     const secret = process.env.SLACK_SIGNING_SECRET!;
 
-    // Verify Slack signature
+    // Parse JSON safely
+    const payload = JSON.parse(rawBody);
+
+    // ✅ Step 1: Handle Slack URL verification challenge
+    if (payload.type === "url_verification" && payload.challenge) {
+      return new Response(payload.challenge, {
+        status: 200,
+        headers: { "Content-Type": "text/plain" },
+      });
+    }
+
+    // ✅ Step 2: Verify Slack signature for normal events
+    if (!timestamp || !signature)
+      return NextResponse.json({ error: "Missing signature" }, { status: 400 });
+
     const baseString = `v0:${timestamp}:${rawBody}`;
     const mySig =
       "v0=" +
@@ -18,26 +32,20 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid signature" }, { status: 403 });
     }
 
-    const payload = JSON.parse(rawBody);
-
-    // Slack URL verification
-    if (payload.type === "url_verification") {
-      return new Response(payload.challenge);
-    }
-
-    // Handle message events
+    // ✅ Step 3: Handle real message events
     if (
       payload.event &&
       payload.event.type === "message" &&
       payload.event.subtype !== "bot_message"
     ) {
-      console.log("Slack reply:", payload.event.text);
-      // Here you can forward to Supabase, Pusher, etc. if you want to show live on site
+      console.log("📨 Slack reply received:", payload.event.text);
+      // Future: forward this message to Supabase/Pusher/WebSocket
     }
 
     return NextResponse.json({ ok: true });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Slack reply error:", error);
-    return NextResponse.json({ error: "Bad request" }, { status: 400 });
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+
