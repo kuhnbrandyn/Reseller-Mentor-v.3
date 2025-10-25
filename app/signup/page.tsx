@@ -146,7 +146,7 @@ export default function SignUpPage() {
             <div>
               <h3 className="font-semibold text-white">Shipping & Pallet Mastery</h3>
               <p className="text-gray-400 text-sm">
-                Learn how to buy, receive, and flip pallets with trusted freight contacts.
+                Learn how to buy, ship, and receive pallets with trusted freight contacts.
               </p>
             </div>
           </div>
