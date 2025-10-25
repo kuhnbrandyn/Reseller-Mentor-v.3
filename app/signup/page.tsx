@@ -1,4 +1,5 @@
 "use client";
+
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
@@ -18,33 +19,38 @@ export default function SignUpPage() {
     setLoading(true);
 
     try {
-      // ✅ Check if a profile already exists for this email
+      // ✅ Check if user already exists in profiles
       const { data: existingProfile, error: existingError } = await supabase
         .from("profiles")
         .select("payment_status")
         .eq("email", email.trim())
         .maybeSingle();
 
-      if (existingError) {
-        console.warn("Profile lookup error:", existingError);
-      }
+      if (existingError) console.warn("Profile lookup error:", existingError);
 
       if (existingProfile) {
+        // 🟢 PAID user → alert and redirect to login
         if (existingProfile.payment_status === "paid") {
-          // 🚫 Paid users — block signup, ask them to log in
-          alert("This email already has an active membership. Please log in instead.");
+          alert("User is already an active member please login.");
           setLoading(false);
           router.push("/login");
           return;
-        } else {
-          // 🟡 Unpaid users — resume payment flow
-          router.push(`/terms?email=${encodeURIComponent(email.trim())}`);
+        }
+
+        // 🟡 UNPAID user → redirect to terms (no alert)
+        if (
+          existingProfile.payment_status === "unpaid" ||
+          existingProfile.payment_status === null ||
+          existingProfile.payment_status === "" ||
+          existingProfile.payment_status === undefined
+        ) {
           setLoading(false);
+          router.push(`/terms?email=${encodeURIComponent(email.trim())}`);
           return;
         }
       }
 
-      // ✅ Continue existing signup flow
+      // ✅ Continue with standard signup flow
       if (promoCode === "ADMINFREE" || promoCode === "TESTACCESS") {
         alert("Promo accepted! Redirecting to dashboard...");
         router.push("/dashboard");
