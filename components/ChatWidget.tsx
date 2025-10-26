@@ -13,36 +13,50 @@ export default function ChatWidget({ context }: { context?: string }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
 
   useEffect(() => {
-    // 🔹 Listen to server-sent events for potential future live integrations
+    // 🔹 Create SSE connection to backend
     const evtSource = new EventSource("/api/chat/reply");
 
+    evtSource.onopen = () => {
+      console.log("✅ Connected to SSE stream");
+    };
+
+    evtSource.onerror = (err) => {
+      console.error("❌ SSE connection error", err);
+      evtSource.close();
+      // Auto-reconnect after 3s
+      setTimeout(() => {
+        console.log("🔄 Reconnecting to SSE...");
+        window.location.reload();
+      }, 3000);
+    };
+
     evtSource.onmessage = (event) => {
+      console.log("📨 SSE Received:", event.data);
+
       try {
         const data = JSON.parse(event.data);
         if (data.type === "support_reply") {
           const userThread = localStorage.getItem("thread_ts");
-          if (userThread && data.thread_ts === userThread) {
+          if (!userThread || data.thread_ts === userThread) {
+            console.log("💬 New support message:", data.message);
             setMessages((prev) => [
               ...prev,
               { from: "support", text: data.message },
             ]);
           }
+        } else if (data.connected) {
+          console.log("🟢 SSE connected event confirmed");
         }
-      } catch (e) {
-        console.error("SSE parse error:", e);
+      } catch (err) {
+        console.error("❌ Failed to parse SSE message", err);
       }
     };
 
-    evtSource.onerror = (err) => {
-      console.warn("SSE connection error", err);
-      evtSource.close();
-      setTimeout(() => new EventSource("/api/chat/reply"), 3000);
-    };
-
-    // 🔹 Listen for Slack replies broadcasted from the server
+    // 🔹 BroadcastChannel fallback (optional for local testing)
     const bc = new BroadcastChannel("reseller_mentor_chat");
     bc.onmessage = (event) => {
       if (event.data.from === "slack") {
+        console.log("📡 BroadcastChannel message received:", event.data.text);
         setMessages((prev) => [
           ...prev,
           { from: "support", text: event.data.text },
@@ -76,10 +90,13 @@ export default function ChatWidget({ context }: { context?: string }) {
       });
 
       const data = await res.json();
-      if (data.thread_ts && !threadTs)
+      if (data.thread_ts && !threadTs) {
         localStorage.setItem("thread_ts", data.thread_ts);
+        console.log("🧵 Saved new thread_ts:", data.thread_ts);
+      }
 
       if (res.ok) {
+        console.log("📤 Sent message:", message);
         setMessages((prev) => [...prev, { from: "user", text: message }]);
         setMessage("");
       } else {
