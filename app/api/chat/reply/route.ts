@@ -1,64 +1,70 @@
 import { NextResponse } from "next/server";
 
-export const runtime = "edge"; // required for Vercel
+export const runtime = "edge";
 
 let clients: any[] = [];
 
-// === 1. SSE connection handler ===
-export async function GET(req: Request) {
-  const { signal } = req; // supports abort (close) event
+export async function GET() {
+  const stream = new ReadableStream({
+    start(controller) {
+      const client = { controller };
+      clients.push(client);
+      controller.enqueue(`data: ${JSON.stringify({ connected: true })}\n\n`);
+    },
+    cancel() {
+      clients = clients.filter((c) => c.controller !== this);
+    },
+  });
 
-  return new Response(
-    new ReadableStream({
-      start(controller) {
-        const encoder = new TextEncoder();
-        const client = { controller };
-        clients.push(client);
-
-        // Keep connection alive every 20s
-        const interval = setInterval(() => {
-          controller.enqueue(encoder.encode(":\n\n"));
-        }, 20000);
-
-        // If user disconnects, cleanup
-        signal.addEventListener("abort", () => {
-          clearInterval(interval);
-          clients = clients.filter((c) => c !== client);
-        });
-
-        // Confirm connection
-        controller.enqueue(encoder.encode("event: connected\ndata: ok\n\n"));
-      },
-    }),
-    {
-      headers: {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        Connection: "keep-alive",
-      },
-    }
-  );
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    },
+  });
 }
 
-// === 2. Slack event handler ===
 export async function POST(req: Request) {
   const body = await req.json();
 
-  // Slack verification (first setup)
-  if (body.type === "url_verification") {
+  // ✅ Slack verification handshake
+  if (body?.challenge) {
     return NextResponse.json({ challenge: body.challenge });
   }
 
-  // Handle Slack replies (non-bot messages)
-  if (body.event?.type === "message" && !body.event.bot_id) {
-    const message = {
-      type: "support_reply",
-      message: body.event.text,
-      thread_ts: body.event.thread_ts || body.event.ts,
-    };
+  console.log("🔹 Slack Event Received:", body);
 
-    const data = `data: ${JSON.stringify(message)}\n\n`;
-    clients.forEach((c) => c.controller.enqueue(new TextEncoder().encode(data)));
+  const event = body?.event;
+  if (!event) return NextResponse.json({ ok: false });
+
+  /**
+   * ✅ Catch all message-based events:
+   * - Regular new messages
+   * - Thread replies (Slack sends them as subtype: message_replied)
+   */
+  if (event.type === "message") {
+    let text = event.text;
+    let thread_ts = event.thread_ts || event.ts;
+
+    // Handle threaded reply payload structure
+    if (event.subtype === "message_replied" && event.message) {
+      text = event.message.text;
+      thread_ts = event.message.thread_ts;
+    }
+
+    if (text) {
+      console.log("💬 Forwarding message to clients:", text);
+      clients.forEach((c) => {
+        c.controller.enqueue(
+          `data: ${JSON.stringify({
+            type: "support_reply",
+            message: text,
+            thread_ts,
+          })}\n\n`
+        );
+      });
+    }
   }
 
   return NextResponse.json({ ok: true });
