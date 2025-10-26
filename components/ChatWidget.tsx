@@ -35,14 +35,23 @@ export default function ChatWidget({ context }: { context?: string }) {
       };
 
       evtSource.onmessage = (event) => {
-        if (!event.data || event.data === ":") return; // ignore ping
+        // 🩵 Ignore keep-alive pings
+        if (!event.data || event.data === ":") return;
+
         console.log("📩 Raw SSE event:", event.data);
         try {
           const data = JSON.parse(event.data);
           console.log("📦 Parsed SSE data:", data);
 
-          if (data.type === "support_reply" && data.message) {
-            // Ignore Slack intro lines
+          // ✅ Only display replies matching this user's thread
+          const currentThread = localStorage.getItem("thread_ts");
+
+          if (
+            data.type === "support_reply" &&
+            data.message &&
+            (!data.thread_ts || data.thread_ts === currentThread)
+          ) {
+            // Ignore Slack intro messages
             if (data.message.includes("New Chat")) return;
 
             const cleanMessage = formatSlackMessage(data.message);
@@ -80,7 +89,7 @@ export default function ChatWidget({ context }: { context?: string }) {
 
     connectSSE();
 
-    // 🔹 Local test BroadcastChannel
+    // 🔹 Local test BroadcastChannel (optional)
     const bc = new BroadcastChannel("reseller_mentor_chat");
     bc.onmessage = (event) => {
       console.log("📡 Broadcast message received:", event.data);
@@ -176,40 +185,6 @@ export default function ChatWidget({ context }: { context?: string }) {
             {messages.map((msg, i) => (
               <div
                 key={i}
-                className={`mb-2 p-2 rounded-lg max-w-[85%] ${
-                  msg.from === "user"
-                    ? "ml-auto bg-[#E4B343] text-black"
-                    : "bg-gray-800 text-gray-100"
-                }`}
-              >
-                {msg.text}
-              </div>
-            ))}
-          </div>
-
-          {/* Input */}
-          <div className="p-3 bg-[#111] border-t border-gray-800">
-            <textarea
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              rows={2}
-              placeholder="Type your message..."
-              className="w-full p-2 text-sm rounded-lg bg-black border border-gray-700 text-white placeholder-gray-500 resize-none"
-            />
-            <button
-              onClick={sendMessage}
-              disabled={loading}
-              className="mt-2 w-full bg-[#E4B343] text-black font-semibold py-2 rounded-lg hover:bg-[#cfa132] disabled:opacity-50"
-            >
-              {loading ? "Sending..." : "Send"}
-            </button>
-          </div>
-        </div>
-      )}
-    </>
-  );
-}
-
 
 
 
