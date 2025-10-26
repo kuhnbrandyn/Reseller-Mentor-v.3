@@ -1,6 +1,13 @@
 import { NextResponse } from "next/server";
 
-export const runtime = "edge";
+// ✅ Use Node.js runtime to allow long-lived SSE connections
+export const runtime = "nodejs";
+
+// ✅ Force dynamic to prevent static optimization
+export const dynamic = "force-dynamic";
+
+// ✅ (Optional but recommended) stick all traffic to same region
+export const preferredRegion = "iad1"; // adjust if your main region differs
 
 let clients: { id: string; controller: ReadableStreamDefaultController<Uint8Array> }[] = [];
 
@@ -20,6 +27,7 @@ function corsHeaders() {
   };
 }
 
+// ✅ GET: create SSE stream
 export async function GET() {
   const encoder = new TextEncoder();
 
@@ -29,8 +37,10 @@ export async function GET() {
       clients.push({ id, controller });
       console.log(`✅ SSE client connected (${id}). Total: ${clients.length}`);
 
+      // Send confirmation
       controller.enqueue(encoder.encode(`data: ${JSON.stringify({ connected: true })}\n\n`));
 
+      // Keep alive every 25s
       const ping = setInterval(() => {
         try {
           controller.enqueue(encoder.encode(":\n\n"));
@@ -45,6 +55,7 @@ export async function GET() {
         console.log(`❌ SSE client disconnected (${id})`);
       };
 
+      // handle stream close
       const signal = (controller as any).signal ?? undefined;
       if (signal) signal.addEventListener("abort", cleanup);
     },
@@ -60,10 +71,12 @@ export async function GET() {
   });
 }
 
+// ✅ POST: receive Slack events and broadcast
 export async function POST(req: Request) {
   const encoder = new TextEncoder();
   const body = await req.json();
 
+  // Slack URL verification
   if (body?.challenge) {
     console.log("🔹 Slack verification challenge received");
     return new Response(JSON.stringify({ challenge: body.challenge }), {
@@ -80,6 +93,7 @@ export async function POST(req: Request) {
   let thread_ts: string | undefined;
 
   if (event.type === "message") {
+    // handle threaded replies or regular messages
     if (event.subtype === "message_replied" && event.message) {
       text = event.message.text;
       thread_ts = event.message.thread_ts;
@@ -89,6 +103,7 @@ export async function POST(req: Request) {
     }
   }
 
+  // broadcast to connected browsers
   if (text) {
     console.log("💬 Broadcasting to connected clients:", text);
     const payload = `data: ${JSON.stringify({
