@@ -89,7 +89,7 @@ export default function ChatWidget({ context }: { context?: string }) {
 
     connectSSE();
 
-    // 🔹 Local test BroadcastChannel (optional)
+    // 🔹 Local test BroadcastChannel (for dev only)
     const bc = new BroadcastChannel("reseller_mentor_chat");
     bc.onmessage = (event) => {
       console.log("📡 Broadcast message received:", event.data);
@@ -103,13 +103,13 @@ export default function ChatWidget({ context }: { context?: string }) {
       evtSource?.close();
       bc.close();
     };
-  }, [connectedOnce]);
+  }, [connectedOnce]); // ✅ correct bracket placement
 
   const formatSlackMessage = (msg: string): string => {
     return msg
-      .replace(/\*(.*?)\*/g, "$1") // remove *bold*
-      .replace(/_(.*?)_/g, "$1") // remove _italic_
-      .replace(/~(.*?)~/g, "$1") // remove ~strike~
+      .replace(/\*(.*?)\*/g, "$1")
+      .replace(/_(.*?)_/g, "$1")
+      .replace(/~(.*?)~/g, "$1")
       .replace(/:speech_balloon:/g, "💬")
       .replace(/:e-mail:/g, "📧")
       .replace(/&lt;/g, "<")
@@ -157,6 +157,7 @@ export default function ChatWidget({ context }: { context?: string }) {
     }
   };
 
+  // ✅ The return must be directly after the closing braces
   return (
     <>
       {!open && (
@@ -185,6 +186,40 @@ export default function ChatWidget({ context }: { context?: string }) {
             {messages.map((msg, i) => (
               <div
                 key={i}
+                className={`mb-2 p-2 rounded-lg max-w-[85%] ${
+                  msg.from === "user"
+                    ? "ml-auto bg-[#E4B343] text-black"
+                    : "bg-gray-800 text-gray-100"
+                }`}
+              >
+                {msg.text}
+              </div>
+            ))}
+          </div>
+
+          {/* Input */}
+          <div className="p-3 bg-[#111] border-t border-gray-800">
+            <textarea
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              rows={2}
+              placeholder="Type your message..."
+              className="w-full p-2 text-sm rounded-lg bg-black border border-gray-700 text-white placeholder-gray-500 resize-none"
+            />
+            <button
+              onClick={sendMessage}
+              disabled={loading}
+              className="mt-2 w-full bg-[#E4B343] text-black font-semibold py-2 rounded-lg hover:bg-[#cfa132] disabled:opacity-50"
+            >
+              {loading ? "Sending..." : "Send"}
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 
 
 
