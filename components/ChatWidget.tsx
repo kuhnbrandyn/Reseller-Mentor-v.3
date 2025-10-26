@@ -13,49 +13,69 @@ export default function ChatWidget({ context }: { context?: string }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
 
   useEffect(() => {
-    // ✅ Force-display diagnostic SSE listener
-    const evtSource = new EventSource("/api/chat/reply");
+    let evtSource: EventSource | null = null;
 
-    evtSource.onopen = () => {
-      console.log("✅ SSE connected");
-      setMessages((prev) => [
-        ...prev,
-        { from: "support", text: "✅ Connected to stream" },
-      ]);
-    };
+    const connectSSE = () => {
+      evtSource = new EventSource("/api/chat/reply");
 
-    evtSource.onmessage = (event) => {
-      console.log("📩 Raw SSE event:", event.data);
-      try {
-        const data = JSON.parse(event.data);
-        console.log("📦 Parsed SSE data:", data);
-        // Display everything, no thread filter for now
+      evtSource.onopen = () => {
+        console.log("✅ SSE connected");
         setMessages((prev) => [
           ...prev,
-          { from: "support", text: JSON.stringify(data) },
+          { from: "support", text: "✅ Connected to stream" },
         ]);
-      } catch (err) {
-        console.warn("⚠️ Could not parse SSE message:", event.data);
+      };
+
+      evtSource.onmessage = (event) => {
+        console.log("📩 Raw SSE event:", event.data);
+        try {
+          const data = JSON.parse(event.data);
+          console.log("📦 Parsed SSE data:", data);
+
+          // ✅ Handle Slack support replies cleanly
+          if (data.type === "support_reply" && data.message) {
+            setMessages((prev) => [
+              ...prev,
+              { from: "support", text: data.message },
+            ]);
+          }
+          // ✅ Handle connection confirmation
+          else if (data.connected) {
+            setMessages((prev) => [
+              ...prev,
+              { from: "support", text: "✅ Connected to stream" },
+            ]);
+          }
+          // ✅ Fallback for any other data
+          else {
+            setMessages((prev) => [
+              ...prev,
+              { from: "support", text: event.data },
+            ]);
+          }
+        } catch (err) {
+          console.warn("⚠️ Could not parse SSE message:", event.data);
+        }
+      };
+
+      evtSource.onerror = (err) => {
+        console.error("❌ SSE connection error:", err);
         setMessages((prev) => [
           ...prev,
-          { from: "support", text: event.data },
+          { from: "support", text: "⚠️ Connection lost. Reconnecting..." },
         ]);
-      }
+        evtSource?.close();
+
+        // 🔄 Try to reconnect automatically
+        setTimeout(() => {
+          console.log("🔄 Attempting SSE reconnect...");
+          connectSSE();
+        }, 5000);
+      };
     };
 
-    evtSource.onerror = (err) => {
-      console.error("❌ SSE connection error", err);
-      setMessages((prev) => [
-        ...prev,
-        { from: "support", text: "⚠️ SSE connection error" },
-      ]);
-      evtSource.close();
-      // Optional reconnect
-      setTimeout(() => {
-        console.log("🔄 Reconnecting to SSE...");
-        window.location.reload();
-      }, 5000);
-    };
+    // Initial connection
+    connectSSE();
 
     // 🔹 BroadcastChannel fallback (for local testing)
     const bc = new BroadcastChannel("reseller_mentor_chat");
@@ -68,7 +88,7 @@ export default function ChatWidget({ context }: { context?: string }) {
     };
 
     return () => {
-      evtSource.close();
+      evtSource?.close();
       bc.close();
     };
   }, []);
@@ -106,7 +126,7 @@ export default function ChatWidget({ context }: { context?: string }) {
         alert("⚠️ Message failed to send.");
       }
     } catch (err) {
-      console.error("Send failed:", err);
+      console.error("❌ Send failed:", err);
     } finally {
       setLoading(false);
     }
@@ -173,5 +193,6 @@ export default function ChatWidget({ context }: { context?: string }) {
     </>
   );
 }
+
 
 
