@@ -30,6 +30,12 @@ export default function LoginPage() {
           let redirected = false;
 
           try {
+            // 🧹 Reset chat thread on new login
+            localStorage.removeItem("thread_ts");
+            if (session.user.email) {
+              localStorage.setItem("user_email", session.user.email);
+            }
+
             // ⏱ Safety timeout
             const timeout = setTimeout(() => {
               if (!redirected) {
