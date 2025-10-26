@@ -2,36 +2,42 @@ import { NextResponse } from "next/server";
 
 export const runtime = "edge";
 
-// Track all connected SSE clients
-let clients: { controller: ReadableStreamDefaultController<Uint8Array> }[] = [];
+let clients: { id: string; controller: ReadableStreamDefaultController<Uint8Array> }[] = [];
 
 export async function GET() {
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
-      const client = { controller };
+      const id = crypto.randomUUID();
+      const client = { id, controller };
       clients.push(client);
-      console.log("✅ New client connected to SSE");
 
-      // Send initial confirmation message
+      console.log(`✅ SSE client connected (${id}). Total: ${clients.length}`);
+
+      // Send initial event to confirm connection
       controller.enqueue(encoder.encode(`data: ${JSON.stringify({ connected: true })}\n\n`));
 
-      // Keep-alive ping every 25s
+      // Keep-alive ping every 25s (required for Safari)
       const ping = setInterval(() => {
-        controller.enqueue(encoder.encode(":\n\n"));
+        try {
+          controller.enqueue(encoder.encode(":\n\n"));
+        } catch (err) {
+          console.warn(`⚠️ Ping failed for client ${id}:`, err);
+          cleanup();
+        }
       }, 25000);
 
-      // Remove this client if the connection closes
+      // Proper close handler
       const cleanup = () => {
         clearInterval(ping);
-        clients = clients.filter((c) => c.controller !== controller);
-        console.log("❌ Client disconnected");
+        clients = clients.filter((c) => c.id !== id);
+        console.log(`❌ SSE client disconnected (${id}). Remaining: ${clients.length}`);
       };
 
-      // Use try/finally to ensure cleanup on disconnect
-      // @ts-ignore - close() exists at runtime
-      controller.close = cleanup;
+      // Detect when browser closes connection
+      const signal = (controller as any).signal ?? undefined;
+      if (signal) signal.addEventListener("abort", cleanup);
     },
   });
 
@@ -45,45 +51,54 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const encoder = new TextEncoder();
   const body = await req.json();
 
-  // Handle Slack verification handshake
+  // Slack verification handshake
   if (body?.challenge) {
+    console.log("🔹 Slack verification challenge received");
     return NextResponse.json({ challenge: body.challenge });
   }
-
-  console.log("🔹 Slack Event Received:", body);
 
   const event = body?.event;
   if (!event) return NextResponse.json({ ok: false });
 
-  // Handle all Slack message types (normal + thread replies)
-  if (event.type === "message") {
-    const encoder = new TextEncoder();
-    let text = event.text;
-    let thread_ts = event.thread_ts || event.ts;
+  console.log("📩 Slack Event:", event);
 
+  // Handle Slack message + thread replies
+  let text: string | undefined;
+  let thread_ts: string | undefined;
+
+  if (event.type === "message") {
     if (event.subtype === "message_replied" && event.message) {
       text = event.message.text;
       thread_ts = event.message.thread_ts;
+    } else {
+      text = event.text;
+      thread_ts = event.thread_ts || event.ts;
     }
+  }
 
-    if (text) {
-      console.log("💬 Forwarding message to clients:", text);
-      for (const c of clients) {
-        c.controller.enqueue(
-          encoder.encode(
-            `data: ${JSON.stringify({
-              type: "support_reply",
-              message: text,
-              thread_ts,
-            })}\n\n`
-          )
-        );
+  if (text) {
+    console.log("💬 Broadcasting to connected clients:", text);
+
+    const payload = `data: ${JSON.stringify({
+      type: "support_reply",
+      message: text,
+      thread_ts,
+    })}\n\n`;
+
+    // Send to all open SSE clients
+    clients.forEach((c) => {
+      try {
+        c.controller.enqueue(encoder.encode(payload));
+      } catch (err) {
+        console.warn("⚠️ Failed to send to client:", err);
       }
-    }
+    });
   }
 
   return NextResponse.json({ ok: true });
 }
+
 
