@@ -4,38 +4,47 @@ export const runtime = "edge";
 
 let clients: { id: string; controller: ReadableStreamDefaultController<Uint8Array> }[] = [];
 
+export async function OPTIONS() {
+  // Handle CORS preflight
+  return new Response(null, {
+    status: 204,
+    headers: corsHeaders(),
+  });
+}
+
+function corsHeaders() {
+  return {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  };
+}
+
 export async function GET() {
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
       const id = crypto.randomUUID();
-      const client = { id, controller };
-      clients.push(client);
-
+      clients.push({ id, controller });
       console.log(`✅ SSE client connected (${id}). Total: ${clients.length}`);
 
-      // Send initial event to confirm connection
       controller.enqueue(encoder.encode(`data: ${JSON.stringify({ connected: true })}\n\n`));
 
-      // Keep-alive ping every 25s (required for Safari)
       const ping = setInterval(() => {
         try {
           controller.enqueue(encoder.encode(":\n\n"));
-        } catch (err) {
-          console.warn(`⚠️ Ping failed for client ${id}:`, err);
-          cleanup();
+        } catch {
+          clearInterval(ping);
         }
       }, 25000);
 
-      // Proper close handler
       const cleanup = () => {
         clearInterval(ping);
         clients = clients.filter((c) => c.id !== id);
-        console.log(`❌ SSE client disconnected (${id}). Remaining: ${clients.length}`);
+        console.log(`❌ SSE client disconnected (${id})`);
       };
 
-      // Detect when browser closes connection
       const signal = (controller as any).signal ?? undefined;
       if (signal) signal.addEventListener("abort", cleanup);
     },
@@ -43,6 +52,7 @@ export async function GET() {
 
   return new Response(stream, {
     headers: {
+      ...corsHeaders(),
       "Content-Type": "text/event-stream; charset=utf-8",
       "Cache-Control": "no-cache, no-transform",
       Connection: "keep-alive",
@@ -54,18 +64,18 @@ export async function POST(req: Request) {
   const encoder = new TextEncoder();
   const body = await req.json();
 
-  // Slack verification handshake
   if (body?.challenge) {
     console.log("🔹 Slack verification challenge received");
-    return NextResponse.json({ challenge: body.challenge });
+    return new Response(JSON.stringify({ challenge: body.challenge }), {
+      headers: corsHeaders(),
+    });
   }
 
   const event = body?.event;
-  if (!event) return NextResponse.json({ ok: false });
+  if (!event) return new Response(JSON.stringify({ ok: false }), { headers: corsHeaders() });
 
   console.log("📩 Slack Event:", event);
 
-  // Handle Slack message + thread replies
   let text: string | undefined;
   let thread_ts: string | undefined;
 
@@ -81,14 +91,12 @@ export async function POST(req: Request) {
 
   if (text) {
     console.log("💬 Broadcasting to connected clients:", text);
-
     const payload = `data: ${JSON.stringify({
       type: "support_reply",
       message: text,
       thread_ts,
     })}\n\n`;
 
-    // Send to all open SSE clients
     clients.forEach((c) => {
       try {
         c.controller.enqueue(encoder.encode(payload));
@@ -98,7 +106,7 @@ export async function POST(req: Request) {
     });
   }
 
-  return NextResponse.json({ ok: true });
+  return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders() });
 }
 
 
