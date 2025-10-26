@@ -9,15 +9,14 @@ export default function DashboardLayout({
 }) {
   const pathname = usePathname();
 
- const navLinks = [
-  { href: "/dashboard/ai-mentor", label: "AI Mentor" },
-  { href: "/dashboard/vault", label: "Supplier Vault" },
-  { href: "/dashboard/scams", label: "Avoid Scams" },
-  { href: "/dashboard/business", label: "Business Setup" },
-  { href: "/dashboard/sourcing", label: "Pro Sourcing Tips" },
-  { href: "/dashboard/shipping", label: "Shipping Pallets" },
-];
-
+  const navLinks = [
+    { href: "/dashboard/ai-mentor", label: "AI Mentor" },
+    { href: "/dashboard/vault", label: "Supplier Vault" },
+    { href: "/dashboard/scams", label: "Avoid Scams" },
+    { href: "/dashboard/business", label: "Business Setup" },
+    { href: "/dashboard/sourcing", label: "Pro Sourcing Tips" },
+    { href: "/dashboard/shipping", label: "Shipping Pallets" },
+  ];
 
   return (
     <div className="flex min-h-screen bg-black text-white">
@@ -40,7 +39,26 @@ export default function DashboardLayout({
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 p-8">{children}</main>
+      <main className="flex-1 p-8 flex flex-col justify-between">
+        <div>{children}</div>
+
+        {/* === GLOBAL FOOTER === */}
+        <footer className="text-center text-gray-400 mt-12 pb-6 text-sm border-t border-gray-800 pt-4">
+          <p>
+            Contact:{" "}
+            <a
+              href="mailto:support@myresellermentor.com"
+              className="text-[#E4B343] hover:underline"
+            >
+              support@myresellermentor.com
+            </a>
+          </p>
+          <p className="mt-1">
+            &copy; {new Date().getFullYear()} My Reseller Mentor. All rights reserved.
+          </p>
+        </footer>
+      </main>
     </div>
   );
 }
+
