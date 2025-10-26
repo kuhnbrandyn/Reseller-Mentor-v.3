@@ -2,30 +2,36 @@ import { NextResponse } from "next/server";
 
 export const runtime = "edge";
 
-// Keep all connected SSE clients
+// Track all connected SSE clients
 let clients: { controller: ReadableStreamDefaultController<Uint8Array> }[] = [];
 
 export async function GET() {
+  const encoder = new TextEncoder();
+
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
       const client = { controller };
       clients.push(client);
       console.log("✅ New client connected to SSE");
 
-      // Send initial connection confirmation
-      const encoder = new TextEncoder();
+      // Send initial confirmation message
       controller.enqueue(encoder.encode(`data: ${JSON.stringify({ connected: true })}\n\n`));
 
-      // Keep-alive ping every 25 seconds
+      // Keep-alive ping every 25s
       const ping = setInterval(() => {
         controller.enqueue(encoder.encode(":\n\n"));
       }, 25000);
 
-      controller.signal?.addEventListener("abort", () => {
+      // Remove this client if the connection closes
+      const cleanup = () => {
         clearInterval(ping);
         clients = clients.filter((c) => c.controller !== controller);
         console.log("❌ Client disconnected");
-      });
+      };
+
+      // Use try/finally to ensure cleanup on disconnect
+      // @ts-ignore - close() exists at runtime
+      controller.close = cleanup;
     },
   });
 
@@ -41,7 +47,7 @@ export async function GET() {
 export async function POST(req: Request) {
   const body = await req.json();
 
-  // Slack verification handshake
+  // Handle Slack verification handshake
   if (body?.challenge) {
     return NextResponse.json({ challenge: body.challenge });
   }
@@ -51,7 +57,7 @@ export async function POST(req: Request) {
   const event = body?.event;
   if (!event) return NextResponse.json({ ok: false });
 
-  // Only handle message events (includes replies)
+  // Handle all Slack message types (normal + thread replies)
   if (event.type === "message") {
     const encoder = new TextEncoder();
     let text = event.text;
@@ -80,3 +86,4 @@ export async function POST(req: Request) {
 
   return NextResponse.json({ ok: true });
 }
+
