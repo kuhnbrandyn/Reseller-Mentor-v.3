@@ -16,6 +16,10 @@ export default function ChatWidget({ context }: { context?: string }) {
   useEffect(() => {
     let evtSource: EventSource | null = null;
 
+    // 🧠 Ensure email exists before connecting (important for signup/terms)
+    const storedEmail = localStorage.getItem("user_email");
+    if (!storedEmail) localStorage.setItem("user_email", "guest");
+
     const connectSSE = () => {
       evtSource = new EventSource("/api/chat/reply");
 
@@ -25,19 +29,20 @@ export default function ChatWidget({ context }: { context?: string }) {
           setConnectedOnce(true);
           setMessages((prev) => [
             ...prev,
-            { from: "support", text: "✅ Connected to stream" },
+            { from: "support", text: "✅ Connected to support stream" },
           ]);
         }
       };
 
       evtSource.onmessage = (event) => {
+        if (!event.data || event.data === ":") return; // ignore ping
         console.log("📩 Raw SSE event:", event.data);
         try {
           const data = JSON.parse(event.data);
           console.log("📦 Parsed SSE data:", data);
 
           if (data.type === "support_reply" && data.message) {
-            // Filter out bot’s own intro messages
+            // Ignore Slack intro lines
             if (data.message.includes("New Chat")) return;
 
             const cleanMessage = formatSlackMessage(data.message);
@@ -49,7 +54,7 @@ export default function ChatWidget({ context }: { context?: string }) {
             setConnectedOnce(true);
             setMessages((prev) => [
               ...prev,
-              { from: "support", text: "✅ Connected to stream" },
+              { from: "support", text: "✅ Connected to support stream" },
             ]);
           }
         } catch (err) {
@@ -65,17 +70,17 @@ export default function ChatWidget({ context }: { context?: string }) {
         ]);
         evtSource?.close();
 
-        // Auto-reconnect after delay
+        // Retry after short delay
         setTimeout(() => {
           console.log("🔄 Attempting SSE reconnect...");
           connectSSE();
-        }, 5000);
+        }, 4000);
       };
     };
 
     connectSSE();
 
-    // 🔹 BroadcastChannel fallback (for local testing)
+    // 🔹 Local test BroadcastChannel
     const bc = new BroadcastChannel("reseller_mentor_chat");
     bc.onmessage = (event) => {
       console.log("📡 Broadcast message received:", event.data);
@@ -204,6 +209,7 @@ export default function ChatWidget({ context }: { context?: string }) {
     </>
   );
 }
+
 
 
 
