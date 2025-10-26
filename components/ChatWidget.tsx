@@ -11,6 +11,7 @@ export default function ChatWidget({ context }: { context?: string }) {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [connectedOnce, setConnectedOnce] = useState(false);
 
   useEffect(() => {
     let evtSource: EventSource | null = null;
@@ -20,10 +21,13 @@ export default function ChatWidget({ context }: { context?: string }) {
 
       evtSource.onopen = () => {
         console.log("✅ SSE connected");
-        setMessages((prev) => [
-          ...prev,
-          { from: "support", text: "✅ Connected to stream" },
-        ]);
+        if (!connectedOnce) {
+          setConnectedOnce(true);
+          setMessages((prev) => [
+            ...prev,
+            { from: "support", text: "✅ Connected to stream" },
+          ]);
+        }
       };
 
       evtSource.onmessage = (event) => {
@@ -32,25 +36,20 @@ export default function ChatWidget({ context }: { context?: string }) {
           const data = JSON.parse(event.data);
           console.log("📦 Parsed SSE data:", data);
 
-          // ✅ Handle Slack support replies cleanly
           if (data.type === "support_reply" && data.message) {
+            // Filter out bot’s own intro messages
+            if (data.message.includes("New Chat")) return;
+
+            const cleanMessage = formatSlackMessage(data.message);
             setMessages((prev) => [
               ...prev,
-              { from: "support", text: data.message },
+              { from: "support", text: cleanMessage },
             ]);
-          }
-          // ✅ Handle connection confirmation
-          else if (data.connected) {
+          } else if (data.connected && !connectedOnce) {
+            setConnectedOnce(true);
             setMessages((prev) => [
               ...prev,
               { from: "support", text: "✅ Connected to stream" },
-            ]);
-          }
-          // ✅ Fallback for any other data
-          else {
-            setMessages((prev) => [
-              ...prev,
-              { from: "support", text: event.data },
             ]);
           }
         } catch (err) {
@@ -66,7 +65,7 @@ export default function ChatWidget({ context }: { context?: string }) {
         ]);
         evtSource?.close();
 
-        // 🔄 Try to reconnect automatically
+        // Auto-reconnect after delay
         setTimeout(() => {
           console.log("🔄 Attempting SSE reconnect...");
           connectSSE();
@@ -74,7 +73,6 @@ export default function ChatWidget({ context }: { context?: string }) {
       };
     };
 
-    // Initial connection
     connectSSE();
 
     // 🔹 BroadcastChannel fallback (for local testing)
@@ -91,7 +89,20 @@ export default function ChatWidget({ context }: { context?: string }) {
       evtSource?.close();
       bc.close();
     };
-  }, []);
+  }, [connectedOnce]);
+
+  const formatSlackMessage = (msg: string): string => {
+    return msg
+      .replace(/\*(.*?)\*/g, "$1") // remove *bold*
+      .replace(/_(.*?)_/g, "$1") // remove _italic_
+      .replace(/~(.*?)~/g, "$1") // remove ~strike~
+      .replace(/:speech_balloon:/g, "💬")
+      .replace(/:e-mail:/g, "📧")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&amp;/g, "&")
+      .trim();
+  };
 
   const sendMessage = async () => {
     if (!message.trim()) return;
@@ -193,6 +204,7 @@ export default function ChatWidget({ context }: { context?: string }) {
     </>
   );
 }
+
 
 
 
