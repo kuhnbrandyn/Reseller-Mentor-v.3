@@ -1,3 +1,5 @@
+"use client"; // 👈 Add this line at the top!
+
 import "./globals.css";
 import ChatWidget from "@/components/ChatWidget";
 import { usePathname } from "next/navigation";
@@ -8,11 +10,8 @@ export const metadata = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  // 👇 Dynamically detect current route
   const pathname = usePathname();
-
-  // 👇 Only show chat on signup (and optionally terms)
-  const showChat = pathname === "/signup" || pathname === "/terms";
+  const showChat = pathname === "/signup"; // Only show chat on signup
 
   return (
     <html lang="en">
@@ -23,4 +22,3 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     </html>
   );
 }
-
