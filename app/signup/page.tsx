@@ -81,6 +81,12 @@ export default function SignUpPage() {
       }
 
       if (data?.user) {
+        // 🧹 Reset chat thread and save email for chat widget
+        localStorage.removeItem("thread_ts");
+        if (email) {
+          localStorage.setItem("user_email", email.trim());
+        }
+
         router.push(`/terms?email=${encodeURIComponent(email)}`);
         return;
       }
@@ -319,5 +325,4 @@ export default function SignUpPage() {
     </main>
   );
 }
-
 
