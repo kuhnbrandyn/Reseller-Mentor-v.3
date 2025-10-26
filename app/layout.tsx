@@ -1,8 +1,5 @@
-"use client"; // 👈 Add this line at the top!
-
 import "./globals.css";
-import ChatWidget from "@/components/ChatWidget";
-import { usePathname } from "next/navigation";
+import ClientLayout from "@/components/ClientLayout";
 
 export const metadata = {
   title: "Reseller Mentor AI",
@@ -10,14 +7,10 @@ export const metadata = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
-  const showChat = pathname === "/signup"; // Only show chat on signup
-
   return (
     <html lang="en">
       <body className="bg-black text-white">
-        {children}
-        {showChat && <ChatWidget context="SignUpPage" />}
+        <ClientLayout>{children}</ClientLayout>
       </body>
     </html>
   );
