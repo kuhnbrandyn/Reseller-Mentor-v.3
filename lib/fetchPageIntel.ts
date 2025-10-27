@@ -3,7 +3,7 @@ import * as cheerio from "cheerio";
 
 export async function fetchHomepageIntel(url: string) {
   try {
-    const res = await fetch(url, { method: "GET", redirect: "follow", timeout: 8000 });
+    const res = await fetch(url, { method: "GET", redirect: "follow" });
     if (!res.ok) {
       return { error: `Failed to fetch (HTTP ${res.status})` };
     }
@@ -11,26 +11,24 @@ export async function fetchHomepageIntel(url: string) {
     const html = await res.text();
     const $ = cheerio.load(html);
 
-    // Extract visible text (trim and limit to prevent token overload)
-    const visibleText = $("body").text().replace(/\s+/g, " ").trim().slice(0, 3000);
-
-    // Extract meta and title
+    // Extract title + description
     const title = $("title").text() || "";
     const metaDesc = $('meta[name="description"]').attr("content") || "";
 
-    // Suspicious phrases to look for
+    // Extract visible text (first 3,000 chars)
+    const visibleText = $("body").text().replace(/\s+/g, " ").trim().slice(0, 3000);
+
+    // Suspicious phrases
     const suspiciousPhrases = [
       "90% off",
       "authentic designer",
-      "guaranteed authentic",
       "free shipping worldwide",
       "limited time clearance",
       "official store",
       "100% genuine",
-      "cheap wholesale",
       "paypal only",
       "telegram",
-      "text us on whatsapp",
+      "whatsapp",
       "luxury outlet",
       "bulk deals no refund",
     ];
@@ -39,7 +37,7 @@ export async function fetchHomepageIntel(url: string) {
       visibleText.toLowerCase().includes(p.toLowerCase())
     );
 
-    // Heuristic — detect unrealistic pricing patterns
+    // Detect unrealistic pricing patterns
     const priceMatches = visibleText.match(/\$\d{1,2}\b/g);
     let priceAnomaly = false;
     if (priceMatches && priceMatches.length > 15) {
@@ -51,10 +49,10 @@ export async function fetchHomepageIntel(url: string) {
       meta: { title, metaDesc },
       phrases: foundPhrases,
       priceAnomaly,
-      sampleText: visibleText.slice(0, 500), // for optional debugging
+      sampleText: visibleText.slice(0, 400),
     };
   } catch (err: any) {
     console.error("fetchHomepageIntel error:", err);
-    return { error: "Fetch or parse failed" };
+    return { error: "Failed to fetch or parse homepage" };
   }
 }
