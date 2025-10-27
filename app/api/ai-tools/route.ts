@@ -1,17 +1,18 @@
 // app/api/ai-tools/route.ts
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
+import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
 import { getWhoisAge, getSslStatus } from "../../../lib/domainIntel";
 import { fetchHomepageIntel } from "../../../lib/fetchPageIntel";
 
-export const runtime = "nodejs"; // use Node runtime (Edge doesn't support tls)
+export const runtime = "nodejs";
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+  apiKey: process.env.OPENAI_API_KEY!,
 });
 
 /* ------------------------------------------------------------------
-   1️⃣  Helpers for logging and clamping
+   1️⃣ Helpers
 -------------------------------------------------------------------*/
 const DEBUG = true;
 
@@ -29,7 +30,6 @@ async function safe<T>(label: string, promise: Promise<T>): Promise<T | null> {
 function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
 }
-
 function toRiskLevel(score: number): "Low" | "Moderate" | "High" {
   if (score >= 80) return "Low";
   if (score >= 50) return "Moderate";
@@ -56,7 +56,7 @@ function computeTrustScore(f: {
     else if (f.sslExpiryDays > 90) score += 2;
   }
   if (typeof f.domainAgeYears === "number") {
-    score += Math.min(f.domainAgeYears, 10) * 2; // up to +20
+    score += Math.min(f.domainAgeYears, 10) * 2;
   } else {
     score -= 6;
   }
@@ -67,7 +67,7 @@ function computeTrustScore(f: {
 }
 
 /* ------------------------------------------------------------------
-   3️⃣  GPT Prompt builder — includes factual signals
+   3️⃣ Prompt builder — returns proper typed array
 -------------------------------------------------------------------*/
 function buildSupplierAnalyzerPrompt(args: {
   url: string;
@@ -84,7 +84,7 @@ function buildSupplierAnalyzerPrompt(args: {
     trustSignals: number | null;
   };
   score: number;
-}) {
+}): ChatCompletionMessageParam[] {
   const f = args.features;
   const facts = [
     `URL: ${args.url}`,
@@ -101,22 +101,22 @@ function buildSupplierAnalyzerPrompt(args: {
     `Deterministic score: ${args.score}`,
   ].join("\n");
 
-  return [
+  const messages: ChatCompletionMessageParam[] = [
     {
       role: "system",
-      content: `You are an expert supplier trust evaluator for online resellers. 
-Be concise and factual. Only return strict JSON with keys:
-{ "trust_score": number, "risk_level": "Low"|"Moderate"|"High", "summary": string, "positives": string[], "red_flags": string[] }`,
+      content:
+        "You are an expert supplier trust evaluator for online resellers. Be concise and factual. Only return strict JSON with keys: { trust_score, risk_level, summary, positives, red_flags }.",
     },
     {
       role: "user",
       content: `Analyze the supplier using ONLY these facts:\n${facts}\n\nProvide a reasoned trust assessment.`,
     },
   ];
+  return messages;
 }
 
 /* ------------------------------------------------------------------
-   4️⃣  Main Handler
+   4️⃣ Main Handler
 -------------------------------------------------------------------*/
 export async function POST(req: Request) {
   try {
@@ -124,23 +124,18 @@ export async function POST(req: Request) {
     const tool = body?.tool;
     const input = (body?.input ?? "").trim();
 
-    if (!tool || tool !== "supplier-analyzer")
+    if (tool !== "supplier-analyzer")
       return NextResponse.json({ error: "Invalid tool" }, { status: 400 });
-
     if (!/^https?:\/\/\S+/i.test(input))
-      return NextResponse.json({ error: "Provide full URL with http(s)://" }, { status: 400 });
+      return NextResponse.json({ error: "Provide full URL starting with http(s)://" }, { status: 400 });
 
     const https = input.startsWith("https://");
     const domain = input.replace(/^https?:\/\//, "").split("/")[0].toLowerCase();
 
-    /* ---------------------------
-       Get WHOIS, SSL, homepage intel
-    ----------------------------*/
     const whois = await safe("WHOIS", getWhoisAge(domain));
     const ssl = await safe("SSL", getSslStatus(domain));
     const homepage = await safe("HOMEPAGE", fetchHomepageIntel(input));
 
-    // 👇 Safe field access (fixes build type error)
     const features = {
       sslValid: !!ssl?.sslValid,
       sslExpiryDays: ssl?.sslDaysRemaining ?? null,
@@ -165,20 +160,19 @@ export async function POST(req: Request) {
 
     if (DEBUG) console.log("FEATURES USED:", features, "preScore:", preScore);
 
-    /* ---------------------------
-       GPT-based reasoning
-    ----------------------------*/
+    const messages = buildSupplierAnalyzerPrompt({
+      url: input,
+      domain,
+      https,
+      features,
+      score: preScore,
+    });
+
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       temperature: 0.2,
       response_format: { type: "json_object" },
-      messages: buildSupplierAnalyzerPrompt({
-        url: input,
-        domain,
-        https,
-        features,
-        score: preScore,
-      }),
+      messages,
     });
 
     let aiOut: any = {};
