@@ -16,7 +16,7 @@ export default function DashboardLayout({
   { href: "/dashboard/business", label: "Business Setup" },
   { href: "/dashboard/sourcing", label: "Pro Sourcing Tips" },
   { href: "/dashboard/shipping", label: "Shipping Pallets" },
-  { href: "/dashboard/supplier-analyzer", label: "Supplier Analyzer" },
+  { href: "/dashboard/supplier-analyzer", label: "Website Scam Assist" },
   { href: "/dashboard/supply-list", label: "Supply List" }, // 👈 new item
 ];
 
