@@ -1,18 +1,17 @@
 // app/api/ai-tools/route.ts
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
-import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
-import { getWhoisAge, getSslStatus } from "../../../lib/domainIntel";
+import { getSslStatus } from "../../../lib/domainIntel";
 import { fetchHomepageIntel } from "../../../lib/fetchPageIntel";
 
 export const runtime = "nodejs";
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY!,
+  apiKey: process.env.OPENAI_API_KEY,
 });
 
 /* ------------------------------------------------------------------
-   1️⃣ Helpers
+   1️⃣  Helpers
 -------------------------------------------------------------------*/
 const DEBUG = true;
 
@@ -30,6 +29,7 @@ async function safe<T>(label: string, promise: Promise<T>): Promise<T | null> {
 function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
 }
+
 function toRiskLevel(score: number): "Low" | "Moderate" | "High" {
   if (score >= 80) return "Low";
   if (score >= 50) return "Moderate";
@@ -37,28 +37,22 @@ function toRiskLevel(score: number): "Low" | "Moderate" | "High" {
 }
 
 /* ------------------------------------------------------------------
-   2️⃣  Deterministic trust-score computation
+   2️⃣  Deterministic trust-score computation (no domain age)
 -------------------------------------------------------------------*/
 function computeTrustScore(f: {
   https: boolean;
   sslValid: boolean;
   sslExpiryDays: number | null;
-  domainAgeYears: number | null;
   hasContact: boolean | null;
   trustSignals: number | null;
   negativeSignals: number;
 }) {
-  let score = 50;
-  score += f.https ? 12 : -6;
-  score += f.sslValid ? 12 : -12;
+  let score = 55;
+  score += f.https ? 10 : -8;
+  score += f.sslValid ? 12 : -10;
   if (typeof f.sslExpiryDays === "number") {
-    if (f.sslExpiryDays > 365) score += 4;
+    if (f.sslExpiryDays > 365) score += 3;
     else if (f.sslExpiryDays > 90) score += 2;
-  }
-  if (typeof f.domainAgeYears === "number") {
-    score += Math.min(f.domainAgeYears, 10) * 2;
-  } else {
-    score -= 6;
   }
   score += f.hasContact ? 6 : -4;
   if (typeof f.trustSignals === "number") score += Math.round(f.trustSignals * 20);
@@ -67,7 +61,7 @@ function computeTrustScore(f: {
 }
 
 /* ------------------------------------------------------------------
-   3️⃣ Prompt builder — returns proper typed array
+   3️⃣  GPT Prompt builder (no domain-age facts)
 -------------------------------------------------------------------*/
 function buildSupplierAnalyzerPrompt(args: {
   url: string;
@@ -76,7 +70,6 @@ function buildSupplierAnalyzerPrompt(args: {
   features: {
     sslValid: boolean;
     sslExpiryDays: number | null;
-    domainAgeYears: number | null;
     title: string | null;
     metaDescription: string | null;
     h1: string | null;
@@ -84,7 +77,7 @@ function buildSupplierAnalyzerPrompt(args: {
     trustSignals: number | null;
   };
   score: number;
-}): ChatCompletionMessageParam[] {
+}) {
   const f = args.features;
   const facts = [
     `URL: ${args.url}`,
@@ -92,7 +85,6 @@ function buildSupplierAnalyzerPrompt(args: {
     `HTTPS: ${args.https}`,
     `SSL valid: ${f.sslValid}`,
     `SSL expiry days: ${f.sslExpiryDays ?? "unknown"}`,
-    `Domain age (years): ${f.domainAgeYears ?? "unknown"}`,
     `Title: ${f.title ?? "n/a"}`,
     `Meta: ${f.metaDescription ?? "n/a"}`,
     `H1: ${f.h1 ?? "n/a"}`,
@@ -101,22 +93,22 @@ function buildSupplierAnalyzerPrompt(args: {
     `Deterministic score: ${args.score}`,
   ].join("\n");
 
-  const messages: ChatCompletionMessageParam[] = [
+  return [
     {
       role: "system",
-      content:
-        "You are an expert supplier trust evaluator for online resellers. Be concise and factual. Only return strict JSON with keys: { trust_score, risk_level, summary, positives, red_flags }.",
+      content: `You are an expert supplier trust evaluator for online resellers. 
+Be concise and factual. Return strict JSON:
+{ "trust_score": number, "risk_level": "Low"|"Moderate"|"High", "summary": string, "positives": string[], "red_flags": string[] }`,
     },
     {
       role: "user",
       content: `Analyze the supplier using ONLY these facts:\n${facts}\n\nProvide a reasoned trust assessment.`,
     },
-  ];
-  return messages;
+  ] as const;
 }
 
 /* ------------------------------------------------------------------
-   4️⃣ Main Handler
+   4️⃣  Main handler
 -------------------------------------------------------------------*/
 export async function POST(req: Request) {
   try {
@@ -124,35 +116,32 @@ export async function POST(req: Request) {
     const tool = body?.tool;
     const input = (body?.input ?? "").trim();
 
-    if (tool !== "supplier-analyzer")
+    if (!tool || tool !== "supplier-analyzer")
       return NextResponse.json({ error: "Invalid tool" }, { status: 400 });
+
     if (!/^https?:\/\/\S+/i.test(input))
-      return NextResponse.json({ error: "Provide full URL starting with http(s)://" }, { status: 400 });
+      return NextResponse.json({ error: "Provide full URL with http(s)://" }, { status: 400 });
 
     const https = input.startsWith("https://");
     const domain = input.replace(/^https?:\/\//, "").split("/")[0].toLowerCase();
 
-    const whois = await safe("WHOIS", getWhoisAge(domain));
     const ssl = await safe("SSL", getSslStatus(domain));
     const homepage = await safe("HOMEPAGE", fetchHomepageIntel(input));
 
     const features = {
       sslValid: !!ssl?.sslValid,
       sslExpiryDays: ssl?.sslDaysRemaining ?? null,
-      domainAgeYears: whois?.ageYears ?? null,
-      title: (homepage as any)?.title ?? (homepage as any)?.meta?.title ?? null,
-      metaDescription:
-        (homepage as any)?.metaDescription ?? (homepage as any)?.meta?.metaDesc ?? null,
-      h1: (homepage as any)?.h1 ?? null,
-      hasContact: (homepage as any)?.hasContact ?? null,
-      trustSignals: (homepage as any)?.trustSignals ?? 0,
+      title: homepage?.title ?? homepage?.meta?.title ?? null,
+      metaDescription: homepage?.metaDescription ?? homepage?.meta?.metaDesc ?? null,
+      h1: homepage?.h1 ?? null,
+      hasContact: homepage?.hasContact ?? null,
+      trustSignals: homepage?.trustSignals ?? 0,
     };
 
     const preScore = computeTrustScore({
       https,
       sslValid: features.sslValid,
       sslExpiryDays: features.sslExpiryDays,
-      domainAgeYears: features.domainAgeYears,
       hasContact: features.hasContact,
       trustSignals: features.trustSignals,
       negativeSignals: 0,
@@ -160,19 +149,17 @@ export async function POST(req: Request) {
 
     if (DEBUG) console.log("FEATURES USED:", features, "preScore:", preScore);
 
-    const messages = buildSupplierAnalyzerPrompt({
-      url: input,
-      domain,
-      https,
-      features,
-      score: preScore,
-    });
-
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       temperature: 0.2,
       response_format: { type: "json_object" },
-      messages,
+      messages: buildSupplierAnalyzerPrompt({
+        url: input,
+        domain,
+        https,
+        features,
+        score: preScore,
+      }),
     });
 
     let aiOut: any = {};
@@ -203,10 +190,10 @@ export async function POST(req: Request) {
         risk_level: finalLevel,
         summary:
           aiOut.summary ||
-          "Combined factual and AI assessment of domain, SSL, and site transparency.",
+          "Combined factual and AI assessment of SSL, HTTPS, and transparency factors.",
         positives: aiOut.positives || [],
         red_flags: aiOut.red_flags || [],
-        notes: ["v2 analyzer using structured facts"],
+        notes: ["v3 analyzer (domain age removed)"],
       },
     });
   } catch (err: any) {
@@ -214,6 +201,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }
+
 
 
 
