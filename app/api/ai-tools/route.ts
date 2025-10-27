@@ -128,14 +128,27 @@ export async function POST(req: Request) {
     const ssl = await safe("SSL", getSslStatus(domain));
     const homepage = await safe("HOMEPAGE", fetchHomepageIntel(input));
 
+    // 🧠 Safely extract homepage fields (avoid TypeScript errors)
+    const title =
+      (homepage as any)?.title ??
+      (homepage as any)?.meta?.title ??
+      null;
+    const metaDescription =
+      (homepage as any)?.metaDescription ??
+      (homepage as any)?.meta?.metaDesc ??
+      null;
+    const h1 = (homepage as any)?.h1 ?? null;
+    const hasContact = (homepage as any)?.hasContact ?? null;
+    const trustSignals = (homepage as any)?.trustSignals ?? 0;
+
     const features = {
       sslValid: !!ssl?.sslValid,
       sslExpiryDays: ssl?.sslDaysRemaining ?? null,
-      title: homepage?.title ?? homepage?.meta?.title ?? null,
-      metaDescription: homepage?.metaDescription ?? homepage?.meta?.metaDesc ?? null,
-      h1: homepage?.h1 ?? null,
-      hasContact: homepage?.hasContact ?? null,
-      trustSignals: homepage?.trustSignals ?? 0,
+      title,
+      metaDescription,
+      h1,
+      hasContact,
+      trustSignals,
     };
 
     const preScore = computeTrustScore({
@@ -193,7 +206,7 @@ export async function POST(req: Request) {
           "Combined factual and AI assessment of SSL, HTTPS, and transparency factors.",
         positives: aiOut.positives || [],
         red_flags: aiOut.red_flags || [],
-        notes: ["v3 analyzer (domain age removed)"],
+        notes: ["v3 analyzer (domain age removed, homepage fields type-safe)"],
       },
     });
   } catch (err: any) {
@@ -201,7 +214,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }
-
 
 
 
