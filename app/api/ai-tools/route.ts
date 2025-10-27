@@ -1,171 +1,239 @@
-"use client";
+// app/api/ai-tools/route.ts
+import OpenAI from "openai";
+import { NextResponse } from "next/server";
+import { getSslStatus } from "../../../lib/domainIntel";
+import { fetchHomepageIntel } from "../../../lib/fetchPageIntel";
 
-import { useState } from "react";
+export const runtime = "nodejs";
 
-type AnalyzerResult = {
-  trust_score: number;
-  risk_level: "Low" | "Moderate" | "High" | string;
-  summary: string;
-  positives: string[];
-  red_flags: string[];
-  notes?: string[];
-  _raw?: string;
-};
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
-export default function SupplierAnalyzerPage() {
-  const [url, setUrl] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<AnalyzerResult | null>(null);
+/* ------------------------------------------------------------------
+   1️⃣ Helpers
+-------------------------------------------------------------------*/
+const DEBUG = true;
 
-  const scoreColor = (score: number) => {
-    if (score >= 80) return "text-green-400";
-    if (score >= 55) return "text-yellow-400";
-    return "text-red-400";
-  };
+async function safe<T>(label: string, promise: Promise<T>): Promise<T | null> {
+  try {
+    const val = await promise;
+    if (DEBUG) console.log(`✅ ${label}`, JSON.stringify(val)?.slice(0, 800));
+    return val;
+  } catch (err: any) {
+    console.error(`❌ ${label}`, err?.message || err);
+    return null;
+  }
+}
 
-  async function runAnalysis() {
-    setError(null);
-    setResult(null);
+function clamp(n: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, n));
+}
 
-    if (!/^https?:\/\//i.test(url)) {
-      setError("Please enter a full URL including https://");
-      return;
-    }
+function toRiskLevel(score: number): "Low" | "Moderate" | "High" {
+  if (score >= 80) return "Low";
+  if (score >= 55) return "Moderate";
+  return "High";
+}
 
-    setLoading(true);
-    try {
-      const res = await fetch("/api/ai-tools", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tool: "supplier-analyzer",
-          input: url,
-        }),
-      });
+/* ------------------------------------------------------------------
+   2️⃣ Reseller-Calibrated Scoring Model
+-------------------------------------------------------------------*/
+function computeTrustScore(f: {
+  https: boolean;
+  sslValid: boolean;
+  sslExpiryDays: number | null;
+  hasContact: boolean | null;
+  trustSignals: number | null;
+  negativeSignals: number;
+}) {
+  let score = 50; // neutral midpoint for small-business style sites
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Request failed");
-      setResult(data.data);
-    } catch (err: any) {
-      setError(err.message || "Something went wrong");
-    } finally {
-      setLoading(false);
-    }
+  // Security layer
+  score += f.https ? 8 : -10;
+  score += f.sslValid ? 8 : -12;
+
+  if (typeof f.sslExpiryDays === "number") {
+    if (f.sslExpiryDays > 365) score += 3;
+    else if (f.sslExpiryDays > 90) score += 1;
   }
 
-  return (
-    <div className="max-w-3xl mx-auto px-6 py-10 text-gray-200">
-      <h1 className="text-3xl font-bold mb-2 text-white">Supplier Analyzer 🔍</h1>
-      <p className="text-gray-400 mb-6">
-        Paste a supplier website to get a trust score, red flags, and a short summary before you buy.
-      </p>
+  // Contact info
+  if (f.hasContact === true) score += 6;
+  else if (f.hasContact === false) score -= 6;
 
-      {/* Input Section */}
-      <div className="flex flex-col md:flex-row gap-3 mb-6">
-        <input
-          type="text"
-          placeholder="https://example.com"
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          className="flex-1 bg-[#111] border border-gray-700 rounded-lg px-4 py-3 text-gray-200 focus:outline-none focus:ring-2 focus:ring-[#E4B343]"
-        />
-        <button
-          onClick={runAnalysis}
-          disabled={loading}
-          className="bg-[#E4B343] text-black font-semibold px-5 py-3 rounded-lg hover:bg-yellow-400 disabled:opacity-50"
-        >
-          {loading ? "Analyzing..." : "Analyze Supplier"}
-        </button>
-      </div>
+  // Trust signals (e.g. verified domains, meta info, social links)
+  if (typeof f.trustSignals === "number") {
+    if (f.trustSignals >= 0.8) score += 12;
+    else if (f.trustSignals >= 0.5) score += 6;
+    else if (f.trustSignals < 0.2) score -= 8;
+  }
 
-      {error && (
-        <div className="text-red-400 bg-red-950 border border-red-800 rounded-lg p-3 mb-6">
-          {error}
-        </div>
-      )}
+  // Negative signals
+  score -= Math.min(f.negativeSignals, 5) * 10;
 
-      {/* Result Section */}
-      {result && (
-        <div className="bg-[#0c0c0c] border border-gray-800 rounded-xl p-6 mt-6">
-          <p className={`text-4xl font-bold ${scoreColor(result.trust_score)}`}>
-            {result.trust_score} / 100
-          </p>
-          <p className="text-gray-400 font-medium">
-            Risk Level:{" "}
-            <span
-              className={`${
-                result.risk_level === "Low"
-                  ? "text-green-400"
-                  : result.risk_level === "Moderate"
-                  ? "text-yellow-400"
-                  : "text-red-400"
-              }`}
-            >
-              {result.risk_level}
-            </span>
-          </p>
-
-          <h2 className="text-xl font-semibold text-white mt-6 mb-2">Summary</h2>
-          <p className="text-gray-300 leading-relaxed">{result.summary}</p>
-
-          <div className="grid md:grid-cols-2 gap-6 mt-6">
-            <div className="bg-[#111] border border-gray-800 rounded-lg p-4">
-              <h3 className="text-lg font-semibold text-green-400 mb-2">
-                Positives
-              </h3>
-              <ul className="list-disc list-inside text-gray-300 text-sm space-y-1">
-                {result.positives.length > 0 ? (
-                  result.positives.map((pos, i) => <li key={i}>{pos}</li>)
-                ) : (
-                  <li>No major positives detected.</li>
-                )}
-              </ul>
-            </div>
-
-            <div className="bg-[#111] border border-gray-800 rounded-lg p-4">
-              <h3 className="text-lg font-semibold text-red-400 mb-2">
-                Red Flags
-              </h3>
-              <ul className="list-disc list-inside text-gray-300 text-sm space-y-1">
-                {result.red_flags.length > 0 ? (
-                  result.red_flags.map((flag, i) => <li key={i}>{flag}</li>)
-                ) : (
-                  <li>No significant red flags detected.</li>
-                )}
-              </ul>
-            </div>
-          </div>
-
-          {/* Disclaimer */}
-          <div className="mt-8 p-4 rounded-lg border border-gray-800 bg-[#111] text-gray-400 text-sm leading-relaxed">
-            <p>
-              ⚠️ <span className="text-[#E4B343] font-semibold">Important:</span>{" "}
-              This trust score is based only on publicly available website data.
-              It should not be the sole factor in your decision-making. Always
-              complete all steps in the{" "}
-              <span className="text-[#E4B343] font-semibold">
-                Scam Avoidance
-              </span>{" "}
-              guide before making purchases.
-            </p>
-            <p className="mt-3">
-              💬 If you find a questionable supplier, please email our team at{" "}
-              <a
-                href="mailto:support@myresellermentor.com"
-                className="text-[#E4B343] underline hover:text-yellow-400"
-              >
-                support@myresellermentor.com
-              </a>{" "}
-              and we’ll review it and share our professional opinion to help
-              protect the community.
-            </p>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+  // Cap and return
+  return clamp(Math.round(score), 5, 95);
 }
+
+/* ------------------------------------------------------------------
+   3️⃣ Smarter Prompt — aware of liquidation suppliers
+-------------------------------------------------------------------*/
+function buildSupplierAnalyzerPrompt(args: {
+  url: string;
+  domain: string;
+  https: boolean;
+  features: {
+    sslValid: boolean;
+    sslExpiryDays: number | null;
+    title: string | null;
+    metaDescription: string | null;
+    h1: string | null;
+    hasContact: boolean | null;
+    trustSignals: number | null;
+    sampleText?: string | null;
+  };
+  score: number;
+}) {
+  const f = args.features;
+  const facts = [
+    `URL: ${args.url}`,
+    `Domain: ${args.domain}`,
+    `HTTPS: ${args.https}`,
+    `SSL valid: ${f.sslValid}`,
+    `SSL expiry days: ${f.sslExpiryDays ?? "unknown"}`,
+    `Title: ${f.title ?? "n/a"}`,
+    `Meta: ${f.metaDescription ?? "n/a"}`,
+    `H1: ${f.h1 ?? "n/a"}`,
+    `Has contact info: ${f.hasContact ?? "unknown"}`,
+    `Trust signals (0..1): ${f.trustSignals ?? 0}`,
+    `Deterministic score: ${args.score}`,
+    `Homepage text sample: ${f.sampleText?.slice(0, 400) ?? "none"}`,
+  ].join("\n");
+
+  return [
+    {
+      role: "system",
+      content: `You are an expert supplier trust evaluator for liquidation and wholesale websites.
+Be factual and balanced — many legitimate resellers have simple websites with minimal branding.
+Be critical of sites that promise unrealistic profits, use vague company info, or hide contact details.
+Return JSON:
+{ "trust_score": number, "risk_level": "Low"|"Moderate"|"High", "summary": string, "positives": string[], "red_flags": string[] }`,
+    },
+    {
+      role: "user",
+      content: `Evaluate the supplier based on the following info:\n${facts}\n\nAssess credibility fairly — do not penalize simplicity if it looks like a genuine liquidation supplier.`,
+    },
+  ];
+}
+
+/* ------------------------------------------------------------------
+   4️⃣ Main handler
+-------------------------------------------------------------------*/
+export async function POST(req: Request) {
+  try {
+    const body = await req.json().catch(() => ({}));
+    const tool = body?.tool;
+    const input = (body?.input ?? "").trim();
+
+    if (tool !== "supplier-analyzer")
+      return NextResponse.json({ error: "Invalid tool" }, { status: 400 });
+
+    if (!/^https?:\/\/\S+/i.test(input))
+      return NextResponse.json(
+        { error: "Provide full URL including http(s)://" },
+        { status: 400 }
+      );
+
+    const https = input.startsWith("https://");
+    const domain = input.replace(/^https?:\/\//, "").split("/")[0].toLowerCase();
+
+    const ssl = await safe("SSL", getSslStatus(domain));
+    const homepage = await safe("HOMEPAGE", fetchHomepageIntel(input));
+
+    const title = (homepage as any)?.title ?? (homepage as any)?.meta?.title ?? null;
+    const metaDescription =
+      (homepage as any)?.metaDescription ?? (homepage as any)?.meta?.metaDesc ?? null;
+    const h1 = (homepage as any)?.h1 ?? null;
+    const hasContact = (homepage as any)?.hasContact ?? null;
+    const trustSignals = (homepage as any)?.trustSignals ?? 0;
+    const sampleText = (homepage as any)?.sampleText ?? "";
+
+    const features = {
+      sslValid: !!ssl?.sslValid,
+      sslExpiryDays: ssl?.sslDaysRemaining ?? null,
+      title,
+      metaDescription,
+      h1,
+      hasContact,
+      trustSignals,
+      sampleText,
+    };
+
+    const preScore = computeTrustScore({
+      https,
+      sslValid: features.sslValid,
+      sslExpiryDays: features.sslExpiryDays,
+      hasContact: features.hasContact,
+      trustSignals: features.trustSignals,
+      negativeSignals: 0,
+    });
+
+    const messages = buildSupplierAnalyzerPrompt({
+      url: input,
+      domain,
+      https,
+      features,
+      score: preScore,
+    }) as any[];
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      temperature: 0.25,
+      response_format: { type: "json_object" },
+      messages,
+    });
+
+    let aiOut: any = {};
+    try {
+      aiOut = JSON.parse(completion.choices?.[0]?.message?.content || "{}");
+    } catch {
+      aiOut = {
+        trust_score: preScore,
+        risk_level: toRiskLevel(preScore),
+        summary: "Parsing fallback",
+        positives: [],
+        red_flags: [],
+      };
+    }
+
+    const finalScore = clamp(
+      Math.round(preScore * 0.6 + (aiOut.trust_score || preScore) * 0.4),
+      5,
+      95
+    );
+    const finalLevel = toRiskLevel(finalScore);
+
+    return NextResponse.json({
+      ok: true,
+      tool,
+      data: {
+        trust_score: finalScore,
+        risk_level: finalLevel,
+        summary:
+          aiOut.summary ||
+          "Balanced assessment based on reseller-oriented credibility factors.",
+        positives: aiOut.positives || [],
+        red_flags: aiOut.red_flags || [],
+        notes: ["v5 reseller-calibrated scoring"],
+      },
+    });
+  } catch (err: any) {
+    console.error("AI Tools API error:", err);
+    return NextResponse.json({ error: "Server error" }, { status: 500 });
+  }
+}
+
 
 
 
