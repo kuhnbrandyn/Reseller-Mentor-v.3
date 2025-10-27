@@ -11,6 +11,7 @@ type AnalyzerResult = {
   red_flags: string[];
   notes?: string[];
   _raw?: string;
+  disclaimer?: string;
 };
 
 export default function SupplierAnalyzerPage() {
@@ -69,9 +70,7 @@ export default function SupplierAnalyzerPage() {
       </p>
 
       <div className="bg-[#111] border border-gray-800 rounded-xl p-4 mb-6">
-        <label className="block text-sm text-gray-400 mb-2">
-          Supplier URL
-        </label>
+        <label className="block text-sm text-gray-400 mb-2">Supplier URL</label>
         <div className="flex gap-3">
           <input
             value={url}
@@ -89,7 +88,8 @@ export default function SupplierAnalyzerPage() {
         </div>
         {error && <p className="text-red-400 text-sm mt-3">{error}</p>}
         <p className="text-xs text-gray-500 mt-3">
-          Tip: Use the full URL including <span className="text-gray-300">https://</span>
+          Tip: Use the full URL including{" "}
+          <span className="text-gray-300">https://</span>
         </p>
       </div>
 
@@ -98,7 +98,9 @@ export default function SupplierAnalyzerPage() {
           <div className="flex items-center justify-between">
             <div className="text-gray-300">
               <div className="text-sm text-gray-400">Trust Score</div>
-              <div className={`text-3xl font-bold ${scoreColor(result.trust_score)}`}>
+              <div
+                className={`text-3xl font-bold ${scoreColor(result.trust_score)}`}
+              >
                 {Math.round(result.trust_score)} / 100
               </div>
               <div className="text-sm text-gray-400 mt-1">
@@ -141,8 +143,27 @@ export default function SupplierAnalyzerPage() {
             </div>
           </div>
 
-          <div className="text-xs text-gray-500 border-t border-gray-800 pt-4">
-            ⚠️ Always validate with a small test order. This AI report is informational and not legal advice.
+          {/* Footer Disclaimer Section */}
+          <div className="text-xs text-gray-500 border-t border-gray-800 pt-4 space-y-2">
+            <p>
+              ⚠️ Always validate with a small test order. This AI report is
+              informational and not legal advice.
+            </p>
+            <p>
+              ⚠️ This score is based solely on website data. Please go through
+              all Scam Avoidance steps before making a decision — do not rely
+              solely on this score.
+            </p>
+            <p>
+              💬 Have concerns about a supplier? Email{" "}
+              <a
+                href="mailto:support@myresellermentor.com"
+                className="text-[#E4B343] underline"
+              >
+                support@myresellermentor.com
+              </a>{" "}
+              and our team will review it and share our professional opinion.
+            </p>
           </div>
 
           {result._raw && (
@@ -158,3 +179,4 @@ export default function SupplierAnalyzerPage() {
     </div>
   );
 }
+
