@@ -140,15 +140,17 @@ export async function POST(req: Request) {
     const ssl = await safe("SSL", getSslStatus(domain));
     const homepage = await safe("HOMEPAGE", fetchHomepageIntel(input));
 
+    // 👇 Safe field access (fixes build type error)
     const features = {
       sslValid: !!ssl?.sslValid,
       sslExpiryDays: ssl?.sslDaysRemaining ?? null,
       domainAgeYears: whois?.ageYears ?? null,
-      title: homepage?.title ?? homepage?.meta?.title ?? null,
-      metaDescription: homepage?.metaDescription ?? homepage?.meta?.metaDesc ?? null,
-      h1: homepage?.h1 ?? null,
-      hasContact: homepage?.hasContact ?? null,
-      trustSignals: homepage?.trustSignals ?? 0,
+      title: (homepage as any)?.title ?? (homepage as any)?.meta?.title ?? null,
+      metaDescription:
+        (homepage as any)?.metaDescription ?? (homepage as any)?.meta?.metaDesc ?? null,
+      h1: (homepage as any)?.h1 ?? null,
+      hasContact: (homepage as any)?.hasContact ?? null,
+      trustSignals: (homepage as any)?.trustSignals ?? 0,
     };
 
     const preScore = computeTrustScore({
@@ -183,7 +185,13 @@ export async function POST(req: Request) {
     try {
       aiOut = JSON.parse(completion.choices?.[0]?.message?.content || "{}");
     } catch {
-      aiOut = { trust_score: preScore, risk_level: toRiskLevel(preScore), summary: "Parsing fallback", positives: [], red_flags: [] };
+      aiOut = {
+        trust_score: preScore,
+        risk_level: toRiskLevel(preScore),
+        summary: "Parsing fallback",
+        positives: [],
+        red_flags: [],
+      };
     }
 
     const finalScore = clamp(
@@ -212,6 +220,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }
+
 
 
 
