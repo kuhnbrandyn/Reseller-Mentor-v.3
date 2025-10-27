@@ -11,7 +11,7 @@ const openai = new OpenAI({
 });
 
 /* ------------------------------------------------------------------
-   1️⃣  Helpers
+   1️⃣ Helpers
 -------------------------------------------------------------------*/
 const DEBUG = true;
 
@@ -37,7 +37,7 @@ function toRiskLevel(score: number): "Low" | "Moderate" | "High" {
 }
 
 /* ------------------------------------------------------------------
-   2️⃣  Deterministic trust-score computation (no domain age)
+   2️⃣ Deterministic trust-score computation (no domain age)
 -------------------------------------------------------------------*/
 function computeTrustScore(f: {
   https: boolean;
@@ -61,7 +61,7 @@ function computeTrustScore(f: {
 }
 
 /* ------------------------------------------------------------------
-   3️⃣  GPT Prompt builder (no domain-age facts)
+   3️⃣ GPT Prompt builder
 -------------------------------------------------------------------*/
 function buildSupplierAnalyzerPrompt(args: {
   url: string;
@@ -104,11 +104,11 @@ Be concise and factual. Return strict JSON:
       role: "user",
       content: `Analyze the supplier using ONLY these facts:\n${facts}\n\nProvide a reasoned trust assessment.`,
     },
-  ] as const;
+  ];
 }
 
 /* ------------------------------------------------------------------
-   4️⃣  Main handler
+   4️⃣ Main handler
 -------------------------------------------------------------------*/
 export async function POST(req: Request) {
   try {
@@ -128,7 +128,6 @@ export async function POST(req: Request) {
     const ssl = await safe("SSL", getSslStatus(domain));
     const homepage = await safe("HOMEPAGE", fetchHomepageIntel(input));
 
-    // 🧠 Safely extract homepage fields (avoid TypeScript errors)
     const title =
       (homepage as any)?.title ??
       (homepage as any)?.meta?.title ??
@@ -162,17 +161,20 @@ export async function POST(req: Request) {
 
     if (DEBUG) console.log("FEATURES USED:", features, "preScore:", preScore);
 
+    // ✅ Fix: Convert messages to mutable array
+    const messages = buildSupplierAnalyzerPrompt({
+      url: input,
+      domain,
+      https,
+      features,
+      score: preScore,
+    }) as any[];
+
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       temperature: 0.2,
       response_format: { type: "json_object" },
-      messages: buildSupplierAnalyzerPrompt({
-        url: input,
-        domain,
-        https,
-        features,
-        score: preScore,
-      }),
+      messages,
     });
 
     let aiOut: any = {};
@@ -206,7 +208,7 @@ export async function POST(req: Request) {
           "Combined factual and AI assessment of SSL, HTTPS, and transparency factors.",
         positives: aiOut.positives || [],
         red_flags: aiOut.red_flags || [],
-        notes: ["v3 analyzer (domain age removed, homepage fields type-safe)"],
+        notes: ["v3 analyzer (domain age removed, messages fix)"],
       },
     });
   } catch (err: any) {
@@ -214,6 +216,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }
+
 
 
 
