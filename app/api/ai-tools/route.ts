@@ -8,7 +8,7 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// ✅ Type-safe fix: remove `as const` and define an explicit return type
+// ✅ Updated system prompt with context awareness
 function buildSupplierAnalyzerPrompt(url: string): Array<{
   role: "system" | "user";
   content: string;
@@ -16,8 +16,18 @@ function buildSupplierAnalyzerPrompt(url: string): Array<{
   return [
     {
       role: "system",
-      content:
-        "You are an expert supplier trust evaluator for online resellers. Be concise, practical, and skeptical. Output ONLY JSON.",
+      content: `
+You are an expert supplier trust evaluator for online resellers.
+Be concise, practical, and balanced — give legitimate marketplaces
+the benefit of the doubt unless clear red flags exist.
+
+Known legitimate liquidation and wholesale suppliers include:
+Macy's Liquidation, BStock, Bulq, Boutique by the Box, 888Lots,
+Via Trading, Quicklotz, Direct Liquidation, ShopBinStores, and Liquidation.com.
+
+Use these as positive reference examples when evaluating new suppliers.
+Return ONLY JSON. No prose outside the JSON.
+      `,
     },
     {
       role: "user",
@@ -34,11 +44,11 @@ Return strict JSON with this exact shape:
   "notes": ["optional extra tips if any"]
 }
 
-Consider: SSL/HTTPS, domain age signals, contact info, return/refund policy,
-pricing realism, stock photos vs original imagery, social proof, review quality,
-brand name consistency, grammar/typos, and any obvious scam patterns.
-If you cannot access external data, reason from the URL/name and provide general checks.
-Output ONLY JSON. No prose outside JSON.
+Consider: SSL/HTTPS, domain name credibility, contact info,
+pricing realism, original vs stock photos, reviews, grammar,
+and any scam indicators. If you cannot access external data,
+reason based on the domain name, context, and patterns.
+Output ONLY JSON.
 `,
     },
   ];
@@ -63,7 +73,67 @@ export async function POST(req: Request) {
         );
       }
 
-      // ✅ Create completion with mutable array type
+      // 🧩 Step 1: Deterministic pre-checks (from your Supplier Vault)
+      const trustedSuppliers = [
+        "888lots.com",
+        "bstock.com",
+        "bulq.com",
+        "liquidation.com",
+        "directliquidation.com",
+        "quicklotz.com",
+        "shopbinstores.com",
+        "viatrading.com",
+        "nusource.io",
+        "app.ghost.io", // included from your screenshot
+      ];
+
+      const flaggedTerms = [
+        "replica",
+        "fake",
+        "cheapbrand",
+        "superdiscount",
+        "outletwholesale",
+        "designerreplica",
+      ];
+
+      const domain = input.replace(/^https?:\/\//, "").split("/")[0].toLowerCase();
+
+      // 🟢 Trusted supplier bypass
+      if (trustedSuppliers.some((site) => domain.includes(site))) {
+        return NextResponse.json({
+          ok: true,
+          tool,
+          data: {
+            trust_score: 95,
+            risk_level: "Low",
+            summary: `✅ ${domain} is a verified supplier listed in Reseller Mentor's trusted Supplier Vault.`,
+            positives: [
+              "Trusted liquidation/wholesale source",
+              "Listed in verified Supplier Vault",
+            ],
+            red_flags: [],
+            notes: ["Bypassed AI due to trusted supplier match."],
+          },
+        });
+      }
+
+      // 🔴 Flagged term bypass
+      if (flaggedTerms.some((term) => domain.includes(term))) {
+        return NextResponse.json({
+          ok: true,
+          tool,
+          data: {
+            trust_score: 20,
+            risk_level: "High",
+            summary: `⚠️ ${domain} contains suspicious wording associated with high-risk or counterfeit suppliers.`,
+            positives: [],
+            red_flags: ["Contains risky keywords in domain name"],
+            notes: ["Bypassed AI due to risk pattern match."],
+          },
+        });
+      }
+
+      // ✅ Step 2: GPT reasoning layer
       const completion = await openai.chat.completions.create({
         model: "gpt-4o-mini",
         response_format: { type: "json_object" },
@@ -73,12 +143,11 @@ export async function POST(req: Request) {
 
       const raw = completion.choices?.[0]?.message?.content || "{}";
 
-      // Validate JSON
+      // ✅ Step 3: JSON validation and normalization
       let parsed: any = {};
       try {
         parsed = JSON.parse(raw);
       } catch {
-        // Fallback if model returns invalid JSON
         parsed = {
           trust_score: 50,
           risk_level: "Moderate",
@@ -89,6 +158,16 @@ export async function POST(req: Request) {
           notes: [],
           _raw: raw,
         };
+      }
+
+      // ✅ Step 4: Score normalization for liquidation-related domains
+      if (parsed.trust_score < 50 && domain.includes("liquidation")) {
+        parsed.trust_score = Math.max(parsed.trust_score, 70);
+        parsed.risk_level = "Moderate";
+        parsed.notes = [
+          ...(parsed.notes || []),
+          "Domain includes 'liquidation' which can be legitimate for verified sources.",
+        ];
       }
 
       return NextResponse.json({ ok: true, tool, data: parsed });
