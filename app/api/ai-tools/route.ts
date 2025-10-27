@@ -2,7 +2,7 @@
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
 import { getWhoisAge, getSslStatus } from "../../../lib/domainIntel";
-import { fetchHomepageIntel } from "../../../lib/fetchPageIntel"; // NEW
+import { fetchHomepageIntel } from "../../../lib/fetchPageIntel";
 
 export const runtime = "nodejs"; // use Node runtime (Edge doesn't support tls)
 
@@ -390,6 +390,7 @@ Days Until Expiry: ${ssl.sslDaysRemaining ?? "unknown"}
     );
   }
 }
+
 
 
 
