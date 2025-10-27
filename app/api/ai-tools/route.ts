@@ -1,8 +1,9 @@
 // app/api/ai-tools/route.ts
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
+import { getWhoisAge, getSslStatus } from "@/lib/domainIntel";
 
-export const runtime = "edge";
+export const runtime = "nodejs"; // use Node runtime (Edge doesn't support tls)
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -62,6 +63,8 @@ Red flags (pre): ${JSON.stringify(preFlags)}
 Consider:
 - Domain credibility and naming (typos, hyphens, digits spam)
 - HTTPS presence
+- WHOIS domain age
+- SSL validity
 - Pricing realism / language patterns (if inferable from the name)
 - Review authenticity indicators (only if inferable)
 - Overall brand legitimacy patterns
@@ -116,7 +119,7 @@ export async function POST(req: Request) {
     const https = input.toLowerCase().startsWith("https://");
     const domain = input.replace(/^https?:\/\//i, "").split("/")[0].toLowerCase();
 
-    // Your trusted list (from Supplier Vault/screenshot + common legit sources)
+    // Your trusted list (from Supplier Vault + known verified sources)
     const trustedSuppliers = [
       "888lots.com",
       "bstock.com",
@@ -128,7 +131,7 @@ export async function POST(req: Request) {
       "viatrading.com",
       "nusource.io",
       "macysliquidation.com",
-      "app.ghost.io", // was on your list; keep if truly intended
+      "app.ghost.io",
     ];
 
     const riskyKeywords = [
@@ -175,7 +178,7 @@ export async function POST(req: Request) {
       });
     }
 
-    // Baseline score (neutral = 60). We'll add +/- penalties/credits.
+    // Baseline score (neutral = 60)
     let baseScore = 60;
 
     // HTTPS check
@@ -186,14 +189,14 @@ export async function POST(req: Request) {
       prePositives.push("HTTPS enabled.");
     }
 
-    // "liquidation" heuristic — neutral, but risky unless trusted
+    // "liquidation" heuristic
     const hasLiquidationWord = /liquidation/i.test(domain);
     if (hasLiquidationWord) {
-      baseScore -= 10; // don't boost; slightly penalize unless trusted
+      baseScore -= 10;
       preFlags.push("Domain includes 'liquidation' (neutral term often abused; verify legitimacy).");
     }
 
-    // risky keywords in domain
+    // risky keywords
     for (const kw of riskyKeywords) {
       if (domain.includes(kw)) {
         baseScore -= 30;
@@ -208,7 +211,7 @@ export async function POST(req: Request) {
       preFlags.push(`Domain uses lower-reputation TLD '${matchedRiskyTLD}'.`);
     }
 
-    // too many digits or hyphens
+    // digits or hyphens
     const digits = (domain.match(/\d/g) || []).length;
     const hyphens = (domain.match(/-/g) || []).length;
     if (digits >= 3) {
@@ -220,7 +223,7 @@ export async function POST(req: Request) {
       preFlags.push("Domain contains many hyphens.");
     }
 
-    // very short/odd hostname
+    // very short host
     const hostRoot = domain.split(".")[0];
     if (hostRoot.length <= 3) {
       baseScore -= 5;
@@ -230,7 +233,45 @@ export async function POST(req: Request) {
     // Clamp deterministic base to sane range
     baseScore = clamp(baseScore, 5, 85);
 
-    // If clearly bad from deterministic checks, short-circuit to High risk
+    // ---------------------------
+    // WHOIS + SSL intel (real data)
+    // ---------------------------
+    let intelSummary = "";
+    try {
+      const [whois, ssl] = await Promise.all([
+        getWhoisAge(domain),
+        getSslStatus(domain),
+      ]);
+
+      intelSummary = `
+WHOIS Age: ${whois.ageYears ? `${whois.ageYears} years` : "unknown"}
+Created: ${whois.createdAt || "unknown"}
+SSL Valid: ${ssl.sslValid ? "Yes" : "No"}
+SSL Issuer: ${ssl.sslIssuer || "unknown"}
+Days Until Expiry: ${ssl.sslDaysRemaining ?? "unknown"}
+`.trim();
+
+      if (whois.ageYears && whois.ageYears > 5) {
+        baseScore += 5;
+        prePositives.push("Domain has existed for over 5 years.");
+      } else if (whois.ageYears && whois.ageYears < 1) {
+        baseScore -= 10;
+        preFlags.push("Newly created domain (<1 year old).");
+      }
+
+      if (ssl.sslValid) {
+        prePositives.push("SSL certificate is valid and active.");
+      } else {
+        baseScore -= 5;
+        preFlags.push("SSL certificate appears invalid or expired.");
+      }
+    } catch (err) {
+      console.warn("Domain intel lookup failed:", err);
+    }
+
+    baseScore = clamp(baseScore, 5, 95);
+
+    // If clearly bad from deterministic checks, short-circuit
     if (baseScore <= 35) {
       return NextResponse.json({
         ok: true,
@@ -239,7 +280,7 @@ export async function POST(req: Request) {
           trust_score: baseScore,
           risk_level: toRiskLevel(baseScore),
           summary:
-            "⚠️ Deterministic checks indicate elevated risk based on domain characteristics. Proceed with caution and verify with a small test order.",
+            "⚠️ Deterministic and factual checks indicate elevated risk based on domain characteristics and WHOIS/SSL info.",
           positives: prePositives,
           red_flags: preFlags,
           notes: ["High-risk domain patterns triggered; GPT not invoked for cost and consistency."],
@@ -257,7 +298,7 @@ export async function POST(req: Request) {
         url: input,
         domain,
         https,
-        prePositives,
+        prePositives: [...prePositives, intelSummary],
         preFlags,
         preScore: baseScore,
       }),
@@ -266,7 +307,6 @@ export async function POST(req: Request) {
 
     const raw = completion.choices?.[0]?.message?.content || "{}";
 
-    // Parse JSON safely
     let ai: {
       trust_score?: number;
       risk_level?: "Low" | "Moderate" | "High" | string;
@@ -290,29 +330,23 @@ export async function POST(req: Request) {
       };
     }
 
-    // Normalize AI score
     const aiScore = clamp(Number(ai.trust_score ?? 55), 10, 95);
-
-    // Blend scores: lean on deterministic rules more than AI
     let finalScore = Math.round(baseScore * 0.6 + aiScore * 0.4);
 
-    // IMPORTANT: cap non-whitelisted "liquidation" domains
-    if (hasLiquidationWord) {
+    if (/liquidation/i.test(domain)) {
       finalScore = Math.min(finalScore, 70);
     }
 
     finalScore = clamp(finalScore, 5, 95);
     const finalLevel = toRiskLevel(finalScore);
 
-    // Merge reason lists
     const positives = Array.from(new Set([...(ai.positives ?? []), ...prePositives]));
     const redFlags = Array.from(new Set([...(ai.red_flags ?? []), ...preFlags]));
     const notes = [...(ai.notes ?? [])];
 
-    // Ensure summary exists
     const summary =
       ai.summary ||
-      "Supplier analyzed using deterministic domain checks and AI reasoning. Consider a small test order and verify business details before scaling.";
+      "Supplier analyzed using deterministic, factual (WHOIS/SSL), and AI reasoning. Consider a small test order and verify details before scaling.";
 
     return NextResponse.json({
       ok: true,
@@ -334,4 +368,5 @@ export async function POST(req: Request) {
     );
   }
 }
+
 
