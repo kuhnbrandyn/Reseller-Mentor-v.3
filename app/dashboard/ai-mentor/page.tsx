@@ -3,7 +3,11 @@ import { useState } from "react";
 
 export default function AIMentor() {
   const [messages, setMessages] = useState([
-    { role: "assistant", content: "Hey 👋 I'm your AI Reseller Mentor! What do you want to work on today — sourcing, live show engagement, or scaling profits?" },
+    {
+      role: "assistant",
+      content:
+        "Hey 👋 I'm your AI Reseller Mentor! What do you want to work on today — sourcing, live show engagement, or scaling profits?",
+    },
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -17,22 +21,52 @@ export default function AIMentor() {
     setInput("");
     setLoading(true);
 
-    // Call your API route (we’ll add it next)
-    const res = await fetch("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages: [...messages, userMessage] }),
-    });
+    try {
+      // ✅ Updated to use your unified AI endpoint
+      const res = await fetch("/api/ai-tools", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tool: "ai-mentor", // 🧠 This tells your API which logic to use
+          input: userMessage.content,
+        }),
+      });
 
-    const data = await res.json();
-    setMessages((prev) => [...prev, { role: "assistant", content: data.reply }]);
+      const data = await res.json();
+
+      if (data?.reply) {
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: data.reply },
+        ]);
+      } else if (data?.data?.summary) {
+        // fallback in case your API returns { data: {...} }
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: data.data.summary },
+        ]);
+      } else {
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: "Hmm, I didn’t catch that. Try again?" },
+        ]);
+      }
+    } catch (err) {
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: "⚠️ Network error — please try again." },
+      ]);
+    }
+
     setLoading(false);
   };
 
   return (
     <main className="min-h-screen flex flex-col items-center justify-center bg-black text-white p-8">
       <div className="w-full max-w-3xl bg-[#0A0A0A] border border-[#E4B343]/40 rounded-2xl p-6 flex flex-col h-[75vh]">
-        <h1 className="text-3xl font-bold text-[#E4B343] mb-6 text-center">AI Reseller Mentor</h1>
+        <h1 className="text-3xl font-bold text-[#E4B343] mb-6 text-center">
+          AI Reseller Mentor
+        </h1>
 
         {/* Chat Messages */}
         <div className="flex-1 overflow-y-auto mb-4 space-y-4">
@@ -72,3 +106,4 @@ export default function AIMentor() {
     </main>
   );
 }
+
