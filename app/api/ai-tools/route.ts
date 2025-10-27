@@ -160,11 +160,8 @@ export async function POST(req: Request) {
     const preFlags: string[] = [];
     const prePositives: string[] = [];
 
-    // ✅ Fixed Trusted Supplier Match (exact or subdomain only)
-    const isTrusted = trustedSuppliers.some((d) =>
-      domain === d || domain.endsWith(`.${d}`)
-    );
-
+    // Trusted bypass
+    const isTrusted = trustedSuppliers.some((d) => domain.endsWith(d) || domain.includes(d));
     if (isTrusted) {
       return NextResponse.json({
         ok: true,
@@ -173,20 +170,13 @@ export async function POST(req: Request) {
           trust_score: 95,
           risk_level: "Low",
           summary: `✅ ${domain} is a verified supplier from the Reseller Mentor trusted list.`,
-          positives: [
-            "Verified source",
-            "Commonly used by professional resellers",
-            "Recognized marketplace/program",
-          ],
+          positives: ["Verified source", "Commonly used by professional resellers", "Recognized marketplace/program"],
           red_flags: [],
           notes: ["Whitelisted (trusted) — AI bypassed to keep results consistent."],
         },
       });
     }
 
-    // ---------------------------
-    // Baseline scoring
-    // ---------------------------
     let baseScore = 60;
 
     if (!https) {
@@ -400,6 +390,7 @@ Days Until Expiry: ${ssl.sslDaysRemaining ?? "unknown"}
     );
   }
 }
+
 
 
 
