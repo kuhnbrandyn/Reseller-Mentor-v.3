@@ -1,7 +1,8 @@
 // app/api/ai-tools/route.ts
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
-import { getWhoisAge, getSslStatus } from "@/lib/domainIntel";
+import { getWhoisAge, getSslStatus } from "../../../lib/domainIntel";
+import { fetchHomepageIntel } from "../../../lib/fetchPageIntel"; // NEW
 
 export const runtime = "nodejs"; // use Node runtime (Edge doesn't support tls)
 
@@ -65,7 +66,7 @@ Consider:
 - HTTPS presence
 - WHOIS domain age
 - SSL validity
-- Pricing realism / language patterns (if inferable from the name)
+- Homepage text patterns (pricing realism, hype language)
 - Review authenticity indicators (only if inferable)
 - Overall brand legitimacy patterns
 
@@ -100,7 +101,6 @@ export async function POST(req: Request) {
     if (!tool) {
       return NextResponse.json({ error: "Missing 'tool'." }, { status: 400 });
     }
-
     if (tool !== "supplier-analyzer") {
       return NextResponse.json({ error: "Unknown tool." }, { status: 400 });
     }
@@ -119,7 +119,6 @@ export async function POST(req: Request) {
     const https = input.toLowerCase().startsWith("https://");
     const domain = input.replace(/^https?:\/\//i, "").split("/")[0].toLowerCase();
 
-    // Your trusted list (from Supplier Vault + known verified sources)
     const trustedSuppliers = [
       "888lots.com",
       "bstock.com",
@@ -178,10 +177,8 @@ export async function POST(req: Request) {
       });
     }
 
-    // Baseline score (neutral = 60)
     let baseScore = 60;
 
-    // HTTPS check
     if (!https) {
       baseScore -= 10;
       preFlags.push("Site is not using HTTPS.");
@@ -189,14 +186,12 @@ export async function POST(req: Request) {
       prePositives.push("HTTPS enabled.");
     }
 
-    // "liquidation" heuristic
     const hasLiquidationWord = /liquidation/i.test(domain);
     if (hasLiquidationWord) {
       baseScore -= 10;
       preFlags.push("Domain includes 'liquidation' (neutral term often abused; verify legitimacy).");
     }
 
-    // risky keywords
     for (const kw of riskyKeywords) {
       if (domain.includes(kw)) {
         baseScore -= 30;
@@ -204,14 +199,12 @@ export async function POST(req: Request) {
       }
     }
 
-    // risky TLDs
     const matchedRiskyTLD = riskyTLDs.find((t) => domain.endsWith(t));
     if (matchedRiskyTLD) {
       baseScore -= 15;
       preFlags.push(`Domain uses lower-reputation TLD '${matchedRiskyTLD}'.`);
     }
 
-    // digits or hyphens
     const digits = (domain.match(/\d/g) || []).length;
     const hyphens = (domain.match(/-/g) || []).length;
     if (digits >= 3) {
@@ -223,18 +216,16 @@ export async function POST(req: Request) {
       preFlags.push("Domain contains many hyphens.");
     }
 
-    // very short host
     const hostRoot = domain.split(".")[0];
     if (hostRoot.length <= 3) {
       baseScore -= 5;
       preFlags.push("Hostname is unusually short (credibility concern).");
     }
 
-    // Clamp deterministic base to sane range
     baseScore = clamp(baseScore, 5, 85);
 
     // ---------------------------
-    // WHOIS + SSL intel (real data)
+    // WHOIS + SSL intel
     // ---------------------------
     let intelSummary = "";
     try {
@@ -271,7 +262,34 @@ Days Until Expiry: ${ssl.sslDaysRemaining ?? "unknown"}
 
     baseScore = clamp(baseScore, 5, 95);
 
-    // If clearly bad from deterministic checks, short-circuit
+    // ---------------------------
+    // Homepage text + price patterns
+    // ---------------------------
+    let homepageIntel: any = {};
+    try {
+      homepageIntel = await fetchHomepageIntel(input);
+      if (homepageIntel.error) {
+        preFlags.push(`Homepage fetch failed: ${homepageIntel.error}`);
+      } else {
+        const { phrases, meta } = homepageIntel;
+        if (phrases.length > 0) {
+          preFlags.push(`Suspicious marketing language found: ${phrases.join(", ")}`);
+          baseScore -= Math.min(phrases.length * 5, 20);
+        }
+        if (meta.title && meta.title.length > 0) {
+          prePositives.push(`Title detected: ${meta.title}`);
+        }
+        if (meta.metaDesc && /official|trusted|verified/i.test(meta.metaDesc)) {
+          baseScore += 3;
+          prePositives.push("Meta description includes credibility terms.");
+        }
+      }
+    } catch (err) {
+      preFlags.push("Homepage scan failed unexpectedly.");
+    }
+
+    baseScore = clamp(baseScore, 5, 95);
+
     if (baseScore <= 35) {
       return NextResponse.json({
         ok: true,
@@ -280,7 +298,7 @@ Days Until Expiry: ${ssl.sslDaysRemaining ?? "unknown"}
           trust_score: baseScore,
           risk_level: toRiskLevel(baseScore),
           summary:
-            "⚠️ Deterministic and factual checks indicate elevated risk based on domain characteristics and WHOIS/SSL info.",
+            "⚠️ Deterministic and factual checks indicate elevated risk based on domain, WHOIS/SSL, and homepage text.",
           positives: prePositives,
           red_flags: preFlags,
           notes: ["High-risk domain patterns triggered; GPT not invoked for cost and consistency."],
@@ -298,8 +316,15 @@ Days Until Expiry: ${ssl.sslDaysRemaining ?? "unknown"}
         url: input,
         domain,
         https,
-        prePositives: [...prePositives, intelSummary],
-        preFlags,
+        prePositives: [
+          ...prePositives,
+          intelSummary,
+          homepageIntel?.meta?.title || "",
+        ],
+        preFlags: [
+          ...preFlags,
+          ...(homepageIntel?.phrases || []),
+        ],
         preScore: baseScore,
       }),
       temperature: 0.2,
@@ -332,10 +357,7 @@ Days Until Expiry: ${ssl.sslDaysRemaining ?? "unknown"}
 
     const aiScore = clamp(Number(ai.trust_score ?? 55), 10, 95);
     let finalScore = Math.round(baseScore * 0.6 + aiScore * 0.4);
-
-    if (/liquidation/i.test(domain)) {
-      finalScore = Math.min(finalScore, 70);
-    }
+    if (/liquidation/i.test(domain)) finalScore = Math.min(finalScore, 70);
 
     finalScore = clamp(finalScore, 5, 95);
     const finalLevel = toRiskLevel(finalScore);
@@ -346,7 +368,7 @@ Days Until Expiry: ${ssl.sslDaysRemaining ?? "unknown"}
 
     const summary =
       ai.summary ||
-      "Supplier analyzed using deterministic, factual (WHOIS/SSL), and AI reasoning. Consider a small test order and verify details before scaling.";
+      "Supplier analyzed using deterministic, factual (WHOIS/SSL + homepage), and AI reasoning. Consider a small test order and verify details before scaling.";
 
     return NextResponse.json({
       ok: true,
@@ -368,5 +390,6 @@ Days Until Expiry: ${ssl.sslDaysRemaining ?? "unknown"}
     );
   }
 }
+
 
 
