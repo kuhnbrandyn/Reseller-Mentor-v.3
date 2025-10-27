@@ -22,39 +22,48 @@ export default function AIMentor() {
     setLoading(true);
 
     try {
-      // ✅ Updated to use your unified AI endpoint
+      // ✅ Send to your AI Mentor API route
       const res = await fetch("/api/ai-tools", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tool: "ai-mentor", // 🧠 This tells your API which logic to use
-          input: userMessage.content,
-        }),
+        body: JSON.stringify({ input: userMessage.content }),
       });
 
       const data = await res.json();
 
-      if (data?.reply) {
+      if (data?.result) {
+        const r = data.result;
+        const formatted = `
+💡 **Quick Win:** ${r.quick_win || "N/A"}
+
+📊 **Data Driven:** ${r.data_driven || "N/A"}
+
+🚀 **Long Term Plan:** ${r.long_term_plan || "N/A"}
+
+🔥 **Motivation:** ${r.motivation_end || "Stay consistent!"}
+        `.trim();
+
         setMessages((prev) => [
           ...prev,
-          { role: "assistant", content: data.reply },
-        ]);
-      } else if (data?.data?.summary) {
-        // fallback in case your API returns { data: {...} }
-        setMessages((prev) => [
-          ...prev,
-          { role: "assistant", content: data.data.summary },
+          { role: "assistant", content: formatted },
         ]);
       } else {
         setMessages((prev) => [
           ...prev,
-          { role: "assistant", content: "Hmm, I didn’t catch that. Try again?" },
+          {
+            role: "assistant",
+            content: "Hmm, I didn’t catch that. Try again?",
+          },
         ]);
       }
     } catch (err) {
+      console.error("Chat error:", err);
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: "⚠️ Network error — please try again." },
+        {
+          role: "assistant",
+          content: "⚠️ Network error — please try again.",
+        },
       ]);
     }
 
@@ -73,14 +82,13 @@ export default function AIMentor() {
           {messages.map((msg, i) => (
             <div
               key={i}
-              className={`p-3 rounded-xl max-w-[80%] ${
+              className={`p-3 rounded-xl max-w-[80%] whitespace-pre-line ${
                 msg.role === "user"
                   ? "bg-[#E4B343] text-black self-end ml-auto"
                   : "bg-[#111] border border-[#E4B343]/30 text-white"
               }`}
-            >
-              {msg.content}
-            </div>
+              dangerouslySetInnerHTML={{ __html: msg.content }}
+            />
           ))}
           {loading && <p className="text-gray-400 italic">Typing...</p>}
         </div>
