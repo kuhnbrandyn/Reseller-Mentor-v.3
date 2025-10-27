@@ -5,8 +5,9 @@ import { getSslStatus } from "../../../lib/domainIntel";
 import { fetchHomepageIntel } from "../../../lib/fetchPageIntel";
 
 export const runtime = "nodejs";
+
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+  apiKey: process.env.OPENAI_API_KEY!,
 });
 
 const DEBUG = true;
@@ -102,7 +103,7 @@ function buildSupplierAnalyzerPrompt(args: {
 
   return [
     {
-      role: "system",
+      role: "system" as const,
       content: `You are an expert supplier trust evaluator for liquidation and wholesale websites.
 Be factual and balanced — many legitimate resellers have simple websites with minimal branding.
 Be critical of sites that promise unrealistic profits, use vague company info, or hide contact details.
@@ -110,7 +111,7 @@ Return JSON:
 { "trust_score": number, "risk_level": "Low"|"Moderate"|"High", "summary": string, "positives": string[], "red_flags": string[] }`,
     },
     {
-      role: "user",
+      role: "user" as const,
       content: `Evaluate the supplier based on the following info:\n${facts}\n\nAssess credibility fairly — do not penalize simplicity if it looks like a genuine liquidation supplier.`,
     },
   ];
@@ -125,16 +126,16 @@ export async function POST(req: Request) {
     const tool = body?.tool;
     const input = (body?.input ?? "").trim();
 
-    /* === 🧠 AI Mentor Chat Logic === */
+    /* === 🧠 AI Mentor Chat === */
     if (tool === "ai-mentor") {
       if (!input)
         return NextResponse.json({ error: "Missing input" }, { status: 400 });
 
-      const mentorPrompt = [
+      const mentorPrompt: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
         {
           role: "system",
-          content: `You are "AI Reseller Mentor", a motivational and highly skilled expert in live selling, Whatnot scaling, sourcing suppliers, pricing, and profit strategy. 
-Be concise, encouraging, and give clear, step-by-step strategies.`,
+          content: `You are "AI Reseller Mentor", a motivational and skilled expert in live selling, Whatnot growth, sourcing suppliers, pricing, and profit scaling. 
+Be concise, encouraging, and provide actionable, real-world reseller strategies.`,
         },
         {
           role: "user",
@@ -155,7 +156,7 @@ Be concise, encouraging, and give clear, step-by-step strategies.`,
       return NextResponse.json({ ok: true, tool, reply });
     }
 
-    /* === 🧩 Supplier Analyzer Logic === */
+    /* === 🔍 Supplier Analyzer === */
     if (tool === "supplier-analyzer") {
       if (!/^https?:\/\/\S+/i.test(input))
         return NextResponse.json(
@@ -203,7 +204,7 @@ Be concise, encouraging, and give clear, step-by-step strategies.`,
         https,
         features,
         score: preScore,
-      }) as any[];
+      });
 
       const completion = await openai.chat.completions.create({
         model: "gpt-4o-mini",
@@ -254,6 +255,7 @@ Be concise, encouraging, and give clear, step-by-step strategies.`,
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }
+
 
 
 
