@@ -22,27 +22,37 @@ export async function getWhoisAge(domain: string): Promise<{
 
     if (!key) throw new Error("Missing WHOIS_API_KEY environment variable");
 
-    // 🔗 Call the APILayer API
     const res = await fetch(`${url}?domain=${domain}`, {
       headers: { apikey: key },
       cache: "no-store",
     });
 
+    const text = await res.text();
+    console.log("🔍 WHOIS raw:", text.slice(0, 1200)); // log partial payload for debug
+
     if (!res.ok) {
-      const text = await res.text();
       throw new Error(`WHOIS API error ${res.status}: ${text}`);
     }
 
-    const data = await res.json();
+    let data: any = {};
+    try {
+      data = JSON.parse(text);
+    } catch {
+      throw new Error("Failed to parse WHOIS JSON");
+    }
 
-    // Try all possible field names for creation date
+    // 🔎 Normalize the field name for creation date
     const created =
       data?.result?.created ||
       data?.created ||
       data?.domain?.created ||
+      data?.domain?.created_date ||
+      data?.domain?.creation_date ||
+      data?.registered ||
       data?.registered_date ||
       data?.registration_date ||
       data?.created_date ||
+      data?.creation_date ||
       null;
 
     if (!created) {
@@ -51,9 +61,12 @@ export async function getWhoisAge(domain: string): Promise<{
     }
 
     const createdAt = new Date(created);
-    const years =
-      (Date.now() - createdAt.getTime()) / (1000 * 60 * 60 * 24 * 365);
+    if (isNaN(createdAt.getTime())) {
+      console.warn("⚠️ WHOIS: Invalid creation date format for", domain, created);
+      return { ageYears: null, createdAt: null, error: "Invalid date format" };
+    }
 
+    const years = (Date.now() - createdAt.getTime()) / (1000 * 60 * 60 * 24 * 365);
     const result = {
       ageYears: parseFloat(years.toFixed(1)),
       createdAt: createdAt.toISOString(),
@@ -113,4 +126,5 @@ export async function getSslStatus(domain: string): Promise<{
     });
   });
 }
+
 
