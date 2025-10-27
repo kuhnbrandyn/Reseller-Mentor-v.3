@@ -16,12 +16,20 @@ export default function SupplyListPage() {
   useEffect(() => {
     async function fetchSupplies() {
       const { data, error } = await supabase
-        .from("recommended_supplies") // 👈 use your table name
-        .select("id, supply_list, purchase_link")
+        .from("recommended_supplies") // 👈 your table name
+        .select("*") // fetch everything for debugging
         .order("supply_list", { ascending: true });
 
-      if (error) console.error("❌ Supabase error:", error.message);
-      else setSupplies(data || []);
+      // 🧠 Debug logs — open your browser console (F12 or ⌥+⌘+I → Console)
+      console.log("✅ Data from Supabase:", data);
+      console.log("❌ Error from Supabase:", error);
+
+      if (error) {
+        console.error("❌ Supabase fetch error:", error.message);
+      } else {
+        setSupplies(data || []);
+      }
+
       setLoading(false);
     }
 
@@ -37,6 +45,10 @@ export default function SupplyListPage() {
 
       {loading ? (
         <p>Loading supplies...</p>
+      ) : supplies.length === 0 ? (
+        <p className="text-gray-500">
+          No supplies found. Check your Supabase connection or RLS settings.
+        </p>
       ) : (
         <div className="grid md:grid-cols-2 gap-4">
           {supplies.map((item) => (
