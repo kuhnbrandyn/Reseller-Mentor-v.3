@@ -37,7 +37,7 @@ function toRiskLevel(score: number): "Low" | "Moderate" | "High" {
 }
 
 /* ------------------------------------------------------------------
-   2️⃣ Deterministic trust-score computation (no domain age)
+   2️⃣ Improved Deterministic Scoring — realistic spread
 -------------------------------------------------------------------*/
 function computeTrustScore(f: {
   https: boolean;
@@ -47,21 +47,36 @@ function computeTrustScore(f: {
   trustSignals: number | null;
   negativeSignals: number;
 }) {
-  let score = 55;
-  score += f.https ? 10 : -8;
-  score += f.sslValid ? 12 : -10;
+  let score = 40; // base lowered for realism
+
+  // HTTPS / SSL
+  score += f.https ? 8 : -10;
+  score += f.sslValid ? 10 : -12;
   if (typeof f.sslExpiryDays === "number") {
     if (f.sslExpiryDays > 365) score += 3;
-    else if (f.sslExpiryDays > 90) score += 2;
+    else if (f.sslExpiryDays > 90) score += 1;
   }
-  score += f.hasContact ? 6 : -4;
-  if (typeof f.trustSignals === "number") score += Math.round(f.trustSignals * 20);
-  score += -Math.min(f.negativeSignals, 3) * 10;
-  return Math.max(5, Math.min(95, Math.round(score)));
+
+  // Contact Info Presence
+  if (f.hasContact === false) score -= 12;
+  else if (f.hasContact === true) score += 6;
+
+  // Trust Signals
+  if (typeof f.trustSignals === "number") {
+    if (f.trustSignals >= 0.8) score += 10;
+    else if (f.trustSignals >= 0.5) score += 5;
+    else if (f.trustSignals < 0.2) score -= 15;
+  }
+
+  // Negatives (e.g., scammy language, missing transparency)
+  score -= Math.min(f.negativeSignals, 5) * 10;
+
+  // Range cap
+  return clamp(Math.round(score), 5, 95);
 }
 
 /* ------------------------------------------------------------------
-   3️⃣ GPT Prompt builder
+   3️⃣ GPT Prompt builder (smarter + more skeptical)
 -------------------------------------------------------------------*/
 function buildSupplierAnalyzerPrompt(args: {
   url: string;
@@ -75,6 +90,7 @@ function buildSupplierAnalyzerPrompt(args: {
     h1: string | null;
     hasContact: boolean | null;
     trustSignals: number | null;
+    sampleText?: string | null;
   };
   score: number;
 }) {
@@ -91,18 +107,21 @@ function buildSupplierAnalyzerPrompt(args: {
     `Has contact info: ${f.hasContact ?? "unknown"}`,
     `Trust signals (0..1): ${f.trustSignals ?? 0}`,
     `Deterministic score: ${args.score}`,
+    `Homepage text sample: ${f.sampleText?.slice(0, 400) ?? "none"}`,
   ].join("\n");
 
   return [
     {
       role: "system",
       content: `You are an expert supplier trust evaluator for online resellers. 
-Be concise and factual. Return strict JSON:
+Be concise, critical, and skeptical of unrealistic claims or missing transparency. 
+Look for scam patterns like 'Amazon returns', '90% off', 'wire us', 'cash only', 'no refunds', or vague company info.
+Return strict JSON:
 { "trust_score": number, "risk_level": "Low"|"Moderate"|"High", "summary": string, "positives": string[], "red_flags": string[] }`,
     },
     {
       role: "user",
-      content: `Analyze the supplier using ONLY these facts:\n${facts}\n\nProvide a reasoned trust assessment.`,
+      content: `Analyze the supplier using ONLY these facts:\n${facts}\n\nProvide a detailed but skeptical assessment.`,
     },
   ];
 }
@@ -139,6 +158,7 @@ export async function POST(req: Request) {
     const h1 = (homepage as any)?.h1 ?? null;
     const hasContact = (homepage as any)?.hasContact ?? null;
     const trustSignals = (homepage as any)?.trustSignals ?? 0;
+    const sampleText = (homepage as any)?.sampleText ?? "";
 
     const features = {
       sslValid: !!ssl?.sslValid,
@@ -148,6 +168,7 @@ export async function POST(req: Request) {
       h1,
       hasContact,
       trustSignals,
+      sampleText,
     };
 
     const preScore = computeTrustScore({
@@ -172,7 +193,7 @@ export async function POST(req: Request) {
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
-      temperature: 0.2,
+      temperature: 0.25,
       response_format: { type: "json_object" },
       messages,
     });
@@ -208,7 +229,7 @@ export async function POST(req: Request) {
           "Combined factual and AI assessment of SSL, HTTPS, and transparency factors.",
         positives: aiOut.positives || [],
         red_flags: aiOut.red_flags || [],
-        notes: ["v3 analyzer (domain age removed, messages fix)"],
+        notes: ["v4 analyzer — calibrated scoring for scam detection"],
       },
     });
   } catch (err: any) {
