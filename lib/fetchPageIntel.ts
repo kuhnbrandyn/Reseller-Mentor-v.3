@@ -1,56 +1,60 @@
 // lib/fetchPageIntel.ts
 import * as cheerio from "cheerio";
 
-/**
- * Fetch homepage HTML and extract basic metadata and price-related phrases
- */
 export async function fetchHomepageIntel(url: string) {
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 7000); // 7s timeout
-
-    const res = await fetch(url, { signal: controller.signal });
-    clearTimeout(timeout);
-
+    const res = await fetch(url, { method: "GET", redirect: "follow", timeout: 8000 });
     if (!res.ok) {
-      return { error: `Failed to load homepage (${res.status})`, meta: {}, phrases: [], rawText: "" };
+      return { error: `Failed to fetch (HTTP ${res.status})` };
     }
 
     const html = await res.text();
     const $ = cheerio.load(html);
 
-    const title = $("title").text().trim();
+    // Extract visible text (trim and limit to prevent token overload)
+    const visibleText = $("body").text().replace(/\s+/g, " ").trim().slice(0, 3000);
+
+    // Extract meta and title
+    const title = $("title").text() || "";
     const metaDesc = $('meta[name="description"]').attr("content") || "";
-    const metaKeywords = $('meta[name="keywords"]').attr("content") || "";
 
-    // Extract visible text (very basic)
-    const text = $("body").text().replace(/\s+/g, " ").toLowerCase();
-
-    // Common suspicious marketing phrases
-    const suspiciousPatterns = [
-      /90%\s*off/g,
-      /80%\s*off/g,
-      /authentic\s+designer/g,
-      /free\s+shipping/g,
-      /guaranteed\s+authentic/g,
-      /limited\s*time\s*offer/g,
-      /wholesale\s+price/g,
-      /clearance\s+sale/g,
-      /factory\s*outlet/g,
-      /luxury\s+replica/g,
+    // Suspicious phrases to look for
+    const suspiciousPhrases = [
+      "90% off",
+      "authentic designer",
+      "guaranteed authentic",
+      "free shipping worldwide",
+      "limited time clearance",
+      "official store",
+      "100% genuine",
+      "cheap wholesale",
+      "paypal only",
+      "telegram",
+      "text us on whatsapp",
+      "luxury outlet",
+      "bulk deals no refund",
     ];
 
-    const matchedPhrases = suspiciousPatterns
-      .filter((re) => re.test(text))
-      .map((re) => re.source.replace(/\\s\*/g, " "));
+    const foundPhrases = suspiciousPhrases.filter((p) =>
+      visibleText.toLowerCase().includes(p.toLowerCase())
+    );
+
+    // Heuristic — detect unrealistic pricing patterns
+    const priceMatches = visibleText.match(/\$\d{1,2}\b/g);
+    let priceAnomaly = false;
+    if (priceMatches && priceMatches.length > 15) {
+      priceAnomaly = true;
+      foundPhrases.push("Excessive low pricing indicators ($ under 99)");
+    }
 
     return {
-      error: null,
-      meta: { title, metaDesc, metaKeywords },
-      phrases: matchedPhrases,
-      rawText: text.slice(0, 1000), // first 1k chars for GPT reference
+      meta: { title, metaDesc },
+      phrases: foundPhrases,
+      priceAnomaly,
+      sampleText: visibleText.slice(0, 500), // for optional debugging
     };
   } catch (err: any) {
-    return { error: err.message || "Failed to fetch homepage", meta: {}, phrases: [], rawText: "" };
+    console.error("fetchHomepageIntel error:", err);
+    return { error: "Fetch or parse failed" };
   }
 }
