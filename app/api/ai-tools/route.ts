@@ -37,7 +37,7 @@ function toRiskLevel(score: number): "Low" | "Moderate" | "High" {
 }
 
 /* ------------------------------------------------------------------
-   2️⃣ Reseller-Calibrated Scoring Model
+   2️⃣ Supplier Analyzer Scoring Model
 -------------------------------------------------------------------*/
 function computeTrustScore(f: {
   https: boolean;
@@ -47,7 +47,7 @@ function computeTrustScore(f: {
   trustSignals: number | null;
   negativeSignals: number;
 }) {
-  let score = 50; // neutral midpoint for small-business style sites
+  let score = 50; // neutral midpoint
 
   // Security layer
   score += f.https ? 8 : -10;
@@ -62,7 +62,7 @@ function computeTrustScore(f: {
   if (f.hasContact === true) score += 6;
   else if (f.hasContact === false) score -= 6;
 
-  // Trust signals (e.g. verified domains, meta info, social links)
+  // Trust signals (meta tags, social links, etc.)
   if (typeof f.trustSignals === "number") {
     if (f.trustSignals >= 0.8) score += 12;
     else if (f.trustSignals >= 0.5) score += 6;
@@ -72,12 +72,11 @@ function computeTrustScore(f: {
   // Negative signals
   score -= Math.min(f.negativeSignals, 5) * 10;
 
-  // Cap and return
   return clamp(Math.round(score), 5, 95);
 }
 
 /* ------------------------------------------------------------------
-   3️⃣ Smarter Prompt — aware of liquidation suppliers
+   3️⃣ Supplier Analyzer Prompt
 -------------------------------------------------------------------*/
 function buildSupplierAnalyzerPrompt(args: {
   url: string;
@@ -128,7 +127,7 @@ Return JSON:
 }
 
 /* ------------------------------------------------------------------
-   4️⃣ Main handler
+   4️⃣ Main Handler — Supports Both Tools
 -------------------------------------------------------------------*/
 export async function POST(req: Request) {
   try {
@@ -136,103 +135,134 @@ export async function POST(req: Request) {
     const tool = body?.tool;
     const input = (body?.input ?? "").trim();
 
-    if (tool !== "supplier-analyzer")
+    // ✅ Allow both tools
+    if (!["supplier-analyzer", "ai-mentor"].includes(tool))
       return NextResponse.json({ error: "Invalid tool" }, { status: 400 });
 
-    if (!/^https?:\/\/\S+/i.test(input))
-      return NextResponse.json(
-        { error: "Provide full URL including http(s)://" },
-        { status: 400 }
-      );
+    /* --------------------------------------------------------------
+       🧠 AI MENTOR SECTION
+    --------------------------------------------------------------*/
+    if (tool === "ai-mentor") {
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        temperature: 0.7,
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are the AI Reseller Mentor. Offer expert, practical, and encouraging guidance for live sellers, sourcing, and scaling Whatnot or liquidation businesses. Always be direct, friendly, and clear.",
+          },
+          { role: "user", content: input },
+        ],
+      });
 
-    const https = input.startsWith("https://");
-    const domain = input.replace(/^https?:\/\//, "").split("/")[0].toLowerCase();
-
-    const ssl = await safe("SSL", getSslStatus(domain));
-    const homepage = await safe("HOMEPAGE", fetchHomepageIntel(input));
-
-    const title = (homepage as any)?.title ?? (homepage as any)?.meta?.title ?? null;
-    const metaDescription =
-      (homepage as any)?.metaDescription ?? (homepage as any)?.meta?.metaDesc ?? null;
-    const h1 = (homepage as any)?.h1 ?? null;
-    const hasContact = (homepage as any)?.hasContact ?? null;
-    const trustSignals = (homepage as any)?.trustSignals ?? 0;
-    const sampleText = (homepage as any)?.sampleText ?? "";
-
-    const features = {
-      sslValid: !!ssl?.sslValid,
-      sslExpiryDays: ssl?.sslDaysRemaining ?? null,
-      title,
-      metaDescription,
-      h1,
-      hasContact,
-      trustSignals,
-      sampleText,
-    };
-
-    const preScore = computeTrustScore({
-      https,
-      sslValid: features.sslValid,
-      sslExpiryDays: features.sslExpiryDays,
-      hasContact: features.hasContact,
-      trustSignals: features.trustSignals,
-      negativeSignals: 0,
-    });
-
-    const messages = buildSupplierAnalyzerPrompt({
-      url: input,
-      domain,
-      https,
-      features,
-      score: preScore,
-    }) as any[];
-
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      temperature: 0.25,
-      response_format: { type: "json_object" },
-      messages,
-    });
-
-    let aiOut: any = {};
-    try {
-      aiOut = JSON.parse(completion.choices?.[0]?.message?.content || "{}");
-    } catch {
-      aiOut = {
-        trust_score: preScore,
-        risk_level: toRiskLevel(preScore),
-        summary: "Parsing fallback",
-        positives: [],
-        red_flags: [],
-      };
+      return NextResponse.json({
+        ok: true,
+        tool,
+        response: completion.choices?.[0]?.message?.content || "No response.",
+      });
     }
 
-    const finalScore = clamp(
-      Math.round(preScore * 0.6 + (aiOut.trust_score || preScore) * 0.4),
-      5,
-      95
-    );
-    const finalLevel = toRiskLevel(finalScore);
+    /* --------------------------------------------------------------
+       🔍 SUPPLIER ANALYZER SECTION
+    --------------------------------------------------------------*/
+    if (tool === "supplier-analyzer") {
+      if (!/^https?:\/\/\S+/i.test(input))
+        return NextResponse.json(
+          { error: "Provide full URL including http(s)://" },
+          { status: 400 }
+        );
 
-    return NextResponse.json({
-      ok: true,
-      tool,
-      data: {
-        trust_score: finalScore,
-        risk_level: finalLevel,
-        summary:
-          aiOut.summary ||
-          "Balanced assessment based on reseller-oriented credibility factors.",
-        positives: aiOut.positives || [],
-        red_flags: aiOut.red_flags || [],
-        notes: ["v5 reseller-calibrated scoring"],
-      },
-    });
+      const https = input.startsWith("https://");
+      const domain = input.replace(/^https?:\/\//, "").split("/")[0].toLowerCase();
+
+      const ssl = await safe("SSL", getSslStatus(domain));
+      const homepage = await safe("HOMEPAGE", fetchHomepageIntel(input));
+
+      const title = (homepage as any)?.title ?? (homepage as any)?.meta?.title ?? null;
+      const metaDescription =
+        (homepage as any)?.metaDescription ?? (homepage as any)?.meta?.metaDesc ?? null;
+      const h1 = (homepage as any)?.h1 ?? null;
+      const hasContact = (homepage as any)?.hasContact ?? null;
+      const trustSignals = (homepage as any)?.trustSignals ?? 0;
+      const sampleText = (homepage as any)?.sampleText ?? "";
+
+      const features = {
+        sslValid: !!ssl?.sslValid,
+        sslExpiryDays: ssl?.sslDaysRemaining ?? null,
+        title,
+        metaDescription,
+        h1,
+        hasContact,
+        trustSignals,
+        sampleText,
+      };
+
+      const preScore = computeTrustScore({
+        https,
+        sslValid: features.sslValid,
+        sslExpiryDays: features.sslExpiryDays,
+        hasContact: features.hasContact,
+        trustSignals: features.trustSignals,
+        negativeSignals: 0,
+      });
+
+      const messages = buildSupplierAnalyzerPrompt({
+        url: input,
+        domain,
+        https,
+        features,
+        score: preScore,
+      }) as any[];
+
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        temperature: 0.25,
+        response_format: { type: "json_object" },
+        messages,
+      });
+
+      let aiOut: any = {};
+      try {
+        aiOut = JSON.parse(completion.choices?.[0]?.message?.content || "{}");
+      } catch {
+        aiOut = {
+          trust_score: preScore,
+          risk_level: toRiskLevel(preScore),
+          summary: "Parsing fallback",
+          positives: [],
+          red_flags: [],
+        };
+      }
+
+      const finalScore = clamp(
+        Math.round(preScore * 0.6 + (aiOut.trust_score || preScore) * 0.4),
+        5,
+        95
+      );
+      const finalLevel = toRiskLevel(finalScore);
+
+      return NextResponse.json({
+        ok: true,
+        tool,
+        data: {
+          trust_score: finalScore,
+          risk_level: finalLevel,
+          summary:
+            aiOut.summary ||
+            "Balanced assessment based on reseller-oriented credibility factors.",
+          positives: aiOut.positives || [],
+          red_flags: aiOut.red_flags || [],
+          notes: ["v6 unified API for mentor + analyzer"],
+        },
+      });
+    }
   } catch (err: any) {
     console.error("AI Tools API error:", err);
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }
+
 
 
 
