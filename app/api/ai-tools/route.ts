@@ -5,14 +5,10 @@ import { getSslStatus } from "../../../lib/domainIntel";
 import { fetchHomepageIntel } from "../../../lib/fetchPageIntel";
 
 export const runtime = "nodejs";
-
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-/* ------------------------------------------------------------------
-   1️⃣ Helpers
--------------------------------------------------------------------*/
 const DEBUG = true;
 
 async function safe<T>(label: string, promise: Promise<T>): Promise<T | null> {
@@ -37,7 +33,7 @@ function toRiskLevel(score: number): "Low" | "Moderate" | "High" {
 }
 
 /* ------------------------------------------------------------------
-   2️⃣ Supplier Analyzer Scoring Model
+   Supplier Analyzer Scoring Logic
 -------------------------------------------------------------------*/
 function computeTrustScore(f: {
   https: boolean;
@@ -47,9 +43,7 @@ function computeTrustScore(f: {
   trustSignals: number | null;
   negativeSignals: number;
 }) {
-  let score = 50; // neutral midpoint
-
-  // Security layer
+  let score = 50;
   score += f.https ? 8 : -10;
   score += f.sslValid ? 8 : -12;
 
@@ -58,25 +52,21 @@ function computeTrustScore(f: {
     else if (f.sslExpiryDays > 90) score += 1;
   }
 
-  // Contact info
   if (f.hasContact === true) score += 6;
   else if (f.hasContact === false) score -= 6;
 
-  // Trust signals (meta tags, social links, etc.)
   if (typeof f.trustSignals === "number") {
     if (f.trustSignals >= 0.8) score += 12;
     else if (f.trustSignals >= 0.5) score += 6;
     else if (f.trustSignals < 0.2) score -= 8;
   }
 
-  // Negative signals
   score -= Math.min(f.negativeSignals, 5) * 10;
-
   return clamp(Math.round(score), 5, 95);
 }
 
 /* ------------------------------------------------------------------
-   3️⃣ Supplier Analyzer Prompt
+   Supplier Analyzer Prompt
 -------------------------------------------------------------------*/
 function buildSupplierAnalyzerPrompt(args: {
   url: string;
@@ -127,7 +117,7 @@ Return JSON:
 }
 
 /* ------------------------------------------------------------------
-   4️⃣ Main Handler — Supports Both Tools
+   Main Handler
 -------------------------------------------------------------------*/
 export async function POST(req: Request) {
   try {
@@ -135,37 +125,37 @@ export async function POST(req: Request) {
     const tool = body?.tool;
     const input = (body?.input ?? "").trim();
 
-    // ✅ Allow both tools
-    if (!["supplier-analyzer", "ai-mentor"].includes(tool))
-      return NextResponse.json({ error: "Invalid tool" }, { status: 400 });
-
-    /* --------------------------------------------------------------
-       🧠 AI MENTOR SECTION
-    --------------------------------------------------------------*/
+    /* === 🧠 AI Mentor Chat Logic === */
     if (tool === "ai-mentor") {
+      if (!input)
+        return NextResponse.json({ error: "Missing input" }, { status: 400 });
+
+      const mentorPrompt = [
+        {
+          role: "system",
+          content: `You are "AI Reseller Mentor", a motivational and highly skilled expert in live selling, Whatnot scaling, sourcing suppliers, pricing, and profit strategy. 
+Be concise, encouraging, and give clear, step-by-step strategies.`,
+        },
+        {
+          role: "user",
+          content: input,
+        },
+      ];
+
       const completion = await openai.chat.completions.create({
         model: "gpt-4o-mini",
-        temperature: 0.7,
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are the AI Reseller Mentor. Offer expert, practical, and encouraging guidance for live sellers, sourcing, and scaling Whatnot or liquidation businesses. Always be direct, friendly, and clear.",
-          },
-          { role: "user", content: input },
-        ],
+        temperature: 0.6,
+        messages: mentorPrompt,
       });
 
-      return NextResponse.json({
-        ok: true,
-        tool,
-        response: completion.choices?.[0]?.message?.content || "No response.",
-      });
+      const reply =
+        completion.choices?.[0]?.message?.content ||
+        "Sorry, I couldn’t generate a response.";
+
+      return NextResponse.json({ ok: true, tool, reply });
     }
 
-    /* --------------------------------------------------------------
-       🔍 SUPPLIER ANALYZER SECTION
-    --------------------------------------------------------------*/
+    /* === 🧩 Supplier Analyzer Logic === */
     if (tool === "supplier-analyzer") {
       if (!/^https?:\/\/\S+/i.test(input))
         return NextResponse.json(
@@ -253,15 +243,18 @@ export async function POST(req: Request) {
             "Balanced assessment based on reseller-oriented credibility factors.",
           positives: aiOut.positives || [],
           red_flags: aiOut.red_flags || [],
-          notes: ["v6 unified API for mentor + analyzer"],
+          notes: ["v5 reseller-calibrated scoring"],
         },
       });
     }
+
+    return NextResponse.json({ error: "Invalid tool" }, { status: 400 });
   } catch (err: any) {
     console.error("AI Tools API error:", err);
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }
+
 
 
 
