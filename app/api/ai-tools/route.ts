@@ -32,12 +32,12 @@ function clamp(n: number, min: number, max: number) {
 
 function toRiskLevel(score: number): "Low" | "Moderate" | "High" {
   if (score >= 80) return "Low";
-  if (score >= 50) return "Moderate";
+  if (score >= 55) return "Moderate";
   return "High";
 }
 
 /* ------------------------------------------------------------------
-   2️⃣ Improved Deterministic Scoring — realistic spread
+   2️⃣ Reseller-Calibrated Scoring Model
 -------------------------------------------------------------------*/
 function computeTrustScore(f: {
   https: boolean;
@@ -47,36 +47,37 @@ function computeTrustScore(f: {
   trustSignals: number | null;
   negativeSignals: number;
 }) {
-  let score = 40; // base lowered for realism
+  let score = 50; // neutral midpoint for small-business style sites
 
-  // HTTPS / SSL
+  // Security layer
   score += f.https ? 8 : -10;
-  score += f.sslValid ? 10 : -12;
+  score += f.sslValid ? 8 : -12;
+
   if (typeof f.sslExpiryDays === "number") {
     if (f.sslExpiryDays > 365) score += 3;
     else if (f.sslExpiryDays > 90) score += 1;
   }
 
-  // Contact Info Presence
-  if (f.hasContact === false) score -= 12;
-  else if (f.hasContact === true) score += 6;
+  // Contact info
+  if (f.hasContact === true) score += 6;
+  else if (f.hasContact === false) score -= 6;
 
-  // Trust Signals
+  // Trust signals (e.g. verified domains, meta info, social links)
   if (typeof f.trustSignals === "number") {
-    if (f.trustSignals >= 0.8) score += 10;
-    else if (f.trustSignals >= 0.5) score += 5;
-    else if (f.trustSignals < 0.2) score -= 15;
+    if (f.trustSignals >= 0.8) score += 12;
+    else if (f.trustSignals >= 0.5) score += 6;
+    else if (f.trustSignals < 0.2) score -= 8;
   }
 
-  // Negatives (e.g., scammy language, missing transparency)
+  // Negative signals
   score -= Math.min(f.negativeSignals, 5) * 10;
 
-  // Range cap
+  // Cap and return
   return clamp(Math.round(score), 5, 95);
 }
 
 /* ------------------------------------------------------------------
-   3️⃣ GPT Prompt builder (smarter + more skeptical)
+   3️⃣ Smarter Prompt — aware of liquidation suppliers
 -------------------------------------------------------------------*/
 function buildSupplierAnalyzerPrompt(args: {
   url: string;
@@ -113,15 +114,15 @@ function buildSupplierAnalyzerPrompt(args: {
   return [
     {
       role: "system",
-      content: `You are an expert supplier trust evaluator for online resellers. 
-Be concise, critical, and skeptical of unrealistic claims or missing transparency. 
-Look for scam patterns like 'Amazon returns', '90% off', 'wire us', 'cash only', 'no refunds', or vague company info.
-Return strict JSON:
+      content: `You are an expert supplier trust evaluator for liquidation and wholesale websites.
+Be factual and balanced — many legitimate resellers have simple websites with minimal branding.
+Be critical of sites that promise unrealistic profits, use vague company info, or hide contact details.
+Return JSON:
 { "trust_score": number, "risk_level": "Low"|"Moderate"|"High", "summary": string, "positives": string[], "red_flags": string[] }`,
     },
     {
       role: "user",
-      content: `Analyze the supplier using ONLY these facts:\n${facts}\n\nProvide a detailed but skeptical assessment.`,
+      content: `Evaluate the supplier based on the following info:\n${facts}\n\nAssess credibility fairly — do not penalize simplicity if it looks like a genuine liquidation supplier.`,
     },
   ];
 }
@@ -135,11 +136,11 @@ export async function POST(req: Request) {
     const tool = body?.tool;
     const input = (body?.input ?? "").trim();
 
-    if (!tool || tool !== "supplier-analyzer")
+    if (tool !== "supplier-analyzer")
       return NextResponse.json({ error: "Invalid tool" }, { status: 400 });
 
     if (!/^https?:\/\/\S+/i.test(input))
-      return NextResponse.json({ error: "Provide full URL with http(s)://" }, { status: 400 });
+      return NextResponse.json({ error: "Provide full URL including http(s)://" }, { status: 400 });
 
     const https = input.startsWith("https://");
     const domain = input.replace(/^https?:\/\//, "").split("/")[0].toLowerCase();
@@ -147,14 +148,9 @@ export async function POST(req: Request) {
     const ssl = await safe("SSL", getSslStatus(domain));
     const homepage = await safe("HOMEPAGE", fetchHomepageIntel(input));
 
-    const title =
-      (homepage as any)?.title ??
-      (homepage as any)?.meta?.title ??
-      null;
+    const title = (homepage as any)?.title ?? (homepage as any)?.meta?.title ?? null;
     const metaDescription =
-      (homepage as any)?.metaDescription ??
-      (homepage as any)?.meta?.metaDesc ??
-      null;
+      (homepage as any)?.metaDescription ?? (homepage as any)?.meta?.metaDesc ?? null;
     const h1 = (homepage as any)?.h1 ?? null;
     const hasContact = (homepage as any)?.hasContact ?? null;
     const trustSignals = (homepage as any)?.trustSignals ?? 0;
@@ -180,9 +176,6 @@ export async function POST(req: Request) {
       negativeSignals: 0,
     });
 
-    if (DEBUG) console.log("FEATURES USED:", features, "preScore:", preScore);
-
-    // ✅ Fix: Convert messages to mutable array
     const messages = buildSupplierAnalyzerPrompt({
       url: input,
       domain,
@@ -226,10 +219,10 @@ export async function POST(req: Request) {
         risk_level: finalLevel,
         summary:
           aiOut.summary ||
-          "Combined factual and AI assessment of SSL, HTTPS, and transparency factors.",
+          "Balanced assessment based on reseller-oriented credibility factors.",
         positives: aiOut.positives || [],
         red_flags: aiOut.red_flags || [],
-        notes: ["v4 analyzer — calibrated scoring for scam detection"],
+        notes: ["v5 reseller-calibrated scoring"],
       },
     });
   } catch (err: any) {
@@ -237,6 +230,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }
+
 
 
 
