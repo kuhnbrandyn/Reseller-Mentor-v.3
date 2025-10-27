@@ -10,7 +10,7 @@ const openai = new OpenAI({
 });
 
 /* ------------------------------------------------------------------
-   🧠 Reseller Mentor AI — Dedicated Endpoint
+   🧠 Reseller Mentor AI (Fine-Tuned Model)
 -------------------------------------------------------------------*/
 export async function POST(req: Request) {
   try {
@@ -20,32 +20,19 @@ export async function POST(req: Request) {
     if (!input)
       return NextResponse.json({ error: "Missing input" }, { status: 400 });
 
-    // === SYSTEM PROMPT ===
     const mentorPrompt: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
       {
         role: "system",
         content: `
-You are **AI Reseller Mentor**, an expert consultant for Whatnot and live selling success.
-Your style is concise, motivational, and highly actionable — grounded in real-world reseller experience.
-
-Focus areas:
-- Live show optimization (timing, flow, engagement)
-- Pricing strategy and inventory management
-- Scaling to $1K+ daily sales
-- Supplier networking and sourcing
-- Show structure and customer retention
-
-Always structure responses clearly with value and energy.
-Tone: confident, friendly, mentor-like.
-Output JSON with three clear sections:
-
+You are AI Reseller Mentor — a motivational, data-driven expert who helps live sellers scale to $1000+ sales days, source profitable inventory, and master Whatnot growth.
+Be concise, practical, and grounded in reseller experience. Use warm, confident tone.
+Return JSON with these four sections:
 {
-  "quick_win": "One immediate action or fix for fast results",
-  "data_driven": "A structured insight based on reasoning or proven reseller tactics",
+  "quick_win": "One immediate, easy-to-implement action",
+  "data_driven": "Insight backed by logic, numbers, or real-world trend",
   "long_term_plan": "A sustainable growth or scaling plan for the coming weeks",
-  "motivation_end": "A motivational closing line encouraging consistency"
-}
-`,
+  "motivation_end": "A short motivational closing message"
+}`,
       },
       {
         role: "user",
@@ -53,9 +40,11 @@ Output JSON with three clear sections:
       },
     ];
 
-    // === COMPLETION CALL ===
+    // ✅ Use fine-tuned model (with fallback)
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model:
+        process.env.OPENAI_FINE_TUNE_MENTOR_MODEL ||
+        "ft:gpt-4.1-mini-2025-04-14:reseller-mentor:resellermentorv2:CSwYEtfH",
       temperature: 0.7,
       response_format: { type: "json_object" },
       messages: mentorPrompt,
@@ -73,7 +62,8 @@ Output JSON with three clear sections:
         quick_win: "N/A",
         data_driven: "N/A",
         long_term_plan: "N/A",
-        motivation_end: "Keep pushing forward — small steps daily lead to big results.",
+        motivation_end:
+          "Keep pushing forward — small steps daily lead to big results.",
       };
     }
 
@@ -87,8 +77,6 @@ Output JSON with three clear sections:
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }
-
-
 
 
 
