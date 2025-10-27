@@ -8,7 +8,11 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-function buildSupplierAnalyzerPrompt(url: string) {
+// ✅ Type-safe fix: remove `as const` and define an explicit return type
+function buildSupplierAnalyzerPrompt(url: string): Array<{
+  role: "system" | "user";
+  content: string;
+}> {
   return [
     {
       role: "system",
@@ -37,7 +41,7 @@ If you cannot access external data, reason from the URL/name and provide general
 Output ONLY JSON. No prose outside JSON.
 `,
     },
-  ] as const;
+  ];
 }
 
 export async function POST(req: Request) {
@@ -51,7 +55,7 @@ export async function POST(req: Request) {
     }
 
     if (tool === "supplier-analyzer") {
-      // Basic sanity check for URL-ish input (doesn't need to be perfect)
+      // Basic sanity check for URL-ish input
       if (!input || !/^https?:\/\/\S+/i.test(input)) {
         return NextResponse.json(
           { error: "Please provide a full URL starting with http(s)://" },
@@ -59,6 +63,7 @@ export async function POST(req: Request) {
         );
       }
 
+      // ✅ Create completion with mutable array type
       const completion = await openai.chat.completions.create({
         model: "gpt-4o-mini",
         response_format: { type: "json_object" },
@@ -67,12 +72,13 @@ export async function POST(req: Request) {
       });
 
       const raw = completion.choices?.[0]?.message?.content || "{}";
+
       // Validate JSON
       let parsed: any = {};
       try {
         parsed = JSON.parse(raw);
       } catch {
-        // Fallback structure if model deviates
+        // Fallback if model returns invalid JSON
         parsed = {
           trust_score: 50,
           risk_level: "Moderate",
