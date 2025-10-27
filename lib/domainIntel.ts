@@ -2,30 +2,74 @@
 import tls from "tls";
 
 /**
- * WHOIS: get domain age in years
- * Uses the ipwhois.io API (free tier ~10k/month)
+ * 🔍 WHOIS LOOKUP (APILayer)
+ * Fetches domain creation date and calculates age in years.
+ * Requires:
+ *   WHOIS_API_URL = https://api.apilayer.com/whois/query
+ *   WHOIS_API_KEY = your actual key
+ *
+ * Add these in Vercel → Settings → Environment Variables.
  */
-export async function getWhoisAge(domain: string) {
+export async function getWhoisAge(domain: string): Promise<{
+  ageYears: number | null;
+  createdAt: string | null;
+  error?: string;
+}> {
   try {
-    const res = await fetch(`https://ipwhois.app/json/${domain}`);
+    const url =
+      process.env.WHOIS_API_URL || "https://api.apilayer.com/whois/query";
+    const key = process.env.WHOIS_API_KEY;
+
+    if (!key) throw new Error("Missing WHOIS_API_KEY environment variable");
+
+    // 🔗 Call the APILayer API
+    const res = await fetch(`${url}?domain=${domain}`, {
+      headers: { apikey: key },
+      cache: "no-store",
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`WHOIS API error ${res.status}: ${text}`);
+    }
+
     const data = await res.json();
 
-    if (!data || !data.created) {
+    // Try all possible field names for creation date
+    const created =
+      data?.result?.created ||
+      data?.created ||
+      data?.domain?.created ||
+      data?.registered_date ||
+      data?.registration_date ||
+      data?.created_date ||
+      null;
+
+    if (!created) {
+      console.warn("⚠️ WHOIS: No creation date found for", domain);
       return { ageYears: null, createdAt: null, error: "No creation date found" };
     }
 
-    const createdAt = new Date(data.created);
-    const years = (Date.now() - createdAt.getTime()) / (1000 * 60 * 60 * 24 * 365);
+    const createdAt = new Date(created);
+    const years =
+      (Date.now() - createdAt.getTime()) / (1000 * 60 * 60 * 24 * 365);
 
-    return { ageYears: parseFloat(years.toFixed(1)), createdAt: createdAt.toISOString() };
-  } catch (err) {
-    console.warn("WHOIS lookup failed:", err);
-    return { ageYears: null, createdAt: null, error: "WHOIS fetch failed" };
+    const result = {
+      ageYears: parseFloat(years.toFixed(1)),
+      createdAt: createdAt.toISOString(),
+    };
+
+    console.log("✅ WHOIS result:", result);
+    return result;
+  } catch (err: any) {
+    console.warn("WHOIS lookup failed:", err.message || err);
+    return { ageYears: null, createdAt: null, error: err.message || "WHOIS failed" };
   }
 }
 
 /**
- * SSL: check for valid certificate
+ * 🔐 SSL STATUS CHECK
+ * Validates certificate and calculates days to expiry.
  */
 export async function getSslStatus(domain: string): Promise<{
   sslValid: boolean;
@@ -62,9 +106,11 @@ export async function getSslStatus(domain: string): Promise<{
     socket.on("error", (err) => {
       resolve({ sslValid: false, error: err.message });
     });
+
     socket.on("timeout", () => {
       socket.destroy();
       resolve({ sslValid: false, error: "Timeout" });
     });
   });
 }
+
