@@ -2,9 +2,7 @@ import { NextResponse } from "next/server";
 import Stripe from "stripe";
 
 // ✅ Initialize Stripe (auto uses your account's default API version)
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2024-06-20", // explicit for stability
-});
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 export async function POST(req: Request) {
   try {
@@ -15,7 +13,6 @@ export async function POST(req: Request) {
     const priceId = body?.priceId?.trim();
     const promoCode = body?.promoCode?.trim();
 
-    // === Input validation ===
     if (!email) {
       console.error("❌ Missing email in checkout request");
       return NextResponse.json({ error: "Missing email" }, { status: 400 });
@@ -28,7 +25,6 @@ export async function POST(req: Request) {
     console.log("✅ Creating checkout for:", email, "using price:", priceId);
     console.log("Promo code received:", promoCode || "none");
 
-    // === Step 1: Look up promotion code (if provided) ===
     let discount: string | null = null;
 
     if (promoCode && promoCode.length > 0) {
@@ -56,7 +52,6 @@ export async function POST(req: Request) {
     console.log("Base URL:", process.env.NEXT_PUBLIC_BASE_URL);
     console.log("Promotion code ID applied:", discount || "none");
 
-    // === Step 2: Create Stripe Checkout Session ===
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
       payment_method_types: ["card"],
@@ -78,6 +73,7 @@ export async function POST(req: Request) {
     );
   }
 }
+
 
 
 
