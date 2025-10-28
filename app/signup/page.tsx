@@ -19,11 +19,14 @@ export default function SignUpPage() {
     setLoading(true);
 
     try {
-      const { data: existingProfile } = await supabase
+      // ✅ STEP 1: Check if profile exists
+      const { data: existingProfile, error: profileError } = await supabase
         .from("profiles")
         .select("payment_status")
         .eq("email", email.trim())
         .maybeSingle();
+
+      if (profileError) console.warn("Profile lookup error:", profileError);
 
       if (existingProfile) {
         if (existingProfile.payment_status === "paid") {
@@ -38,17 +41,23 @@ export default function SignUpPage() {
         }
       }
 
-      const { data: adminData } = await supabase.auth.admin.listUsers();
-      const users = adminData?.users as { email?: string }[];
-      const existingAuthUser = users?.find(
-        (u) => u.email?.toLowerCase() === email.trim().toLowerCase()
-      );
-      if (existingAuthUser) {
-        setLoading(false);
-        router.push(`/terms?email=${encodeURIComponent(email.trim())}`);
-        return;
+      // ✅ STEP 2: Check if user already exists in Auth
+      const { data: adminData, error: userError } =
+        await supabase.auth.admin.listUsers();
+
+      if (!userError && adminData?.users) {
+        const users = adminData.users as { email?: string }[];
+        const existingAuthUser = users.find(
+          (u) => u.email?.toLowerCase() === email.trim().toLowerCase()
+        );
+        if (existingAuthUser) {
+          setLoading(false);
+          router.push(`/terms?email=${encodeURIComponent(email.trim())}`);
+          return;
+        }
       }
 
+      // ✅ STEP 3: New signup (does not exist anywhere)
       if (promoCode === "ADMINFREE" || promoCode === "TESTACCESS") {
         alert("Promo accepted! Redirecting to dashboard...");
         router.push("/dashboard");
@@ -72,9 +81,13 @@ export default function SignUpPage() {
       }
 
       if (data?.user) {
+        // 🧹 Reset chat thread and save email for chat widget
         localStorage.removeItem("thread_ts");
-        localStorage.setItem("user_email", email.trim());
+        if (email) {
+          localStorage.setItem("user_email", email.trim());
+        }
         router.push(`/terms?email=${encodeURIComponent(email)}`);
+        return;
       }
     } catch (err) {
       console.error("❌ Signup error:", err);
@@ -88,12 +101,15 @@ export default function SignUpPage() {
     if (!waitlistEmail)
       return alert("Please enter your email to join the waitlist.");
     setJoiningWaitlist(true);
+
     try {
       const { error } = await supabase
         .from("waitlist")
         .insert([{ email: waitlistEmail }]);
-      if (error) alert("This email is already on the waitlist or invalid.");
-      else {
+
+      if (error) {
+        alert("This email is already on the waitlist or invalid.");
+      } else {
         alert("🎉 You're on the waitlist! We'll notify you soon.");
         setWaitlistEmail("");
       }
@@ -114,7 +130,9 @@ export default function SignUpPage() {
         </h1>
         <p className="text-gray-300 text-lg mb-8">
           Join{" "}
-          <span className="text-[#E4B343] font-semibold">Reseller Mentor AI</span>{" "}
+          <span className="text-[#E4B343] font-semibold">
+            Reseller Mentor AI
+          </span>{" "}
           — the only reseller membership that combines data-driven AI insights,
           ongoing supplier access, and real growth strategies built by sellers
           for sellers.
@@ -126,60 +144,12 @@ export default function SignUpPage() {
             Limited-Time Offer: $599
           </p>
           <p className="text-gray-300 text-sm mt-1">
-            <span className="text-[#E4B343] font-semibold">$49/month</span> billed
-            annually
+            <span className="text-[#E4B343] font-semibold">$49/month</span>{" "}
+            billed annually
           </p>
           <p className="text-xs text-gray-500 mt-2">
-            Make your investment back within the first month of consistent sales.
-          </p>
-        </div>
-      </section>
-
-      {/* === SCREENSHOT PREVIEWS === */}
-      <section className="grid md:grid-cols-3 gap-6 justify-center mt-10 mb-16 max-w-5xl w-full px-6">
-        {/* === AI RESELLER MENTOR === */}
-        <div className="relative bg-[#111] border border-gray-800 rounded-xl overflow-hidden shadow-lg transition-all duration-300 hover:shadow-[0_0_20px_rgba(228,179,67,0.4)]">
-          <img
-            src="/mentor-chat-preview.png"
-            alt="AI Reseller Mentor chat preview"
-            className="w-full h-auto object-cover"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent flex flex-col justify-end p-4">
-            <h3 className="text-[#E4B343] font-bold text-lg mb-1">
-              Scale Smarter, Sell Faster
-            </h3>
-            <p className="text-gray-300 text-sm leading-snug">
-              Personalized AI strategies that turn small shows into $1K sales days.
-            </p>
-          </div>
-        </div>
-
-        {/* === SUPPLIER ANALYZER === */}
-        <div className="relative bg-[#111] border border-gray-800 rounded-xl overflow-hidden shadow-lg transition-all duration-300 hover:shadow-[0_0_20px_rgba(228,179,67,0.4)]">
-          <img
-            src="/supplier-analyzer-preview.png"
-            alt="Supplier Analyzer preview"
-            className="w-full h-auto object-cover"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent flex flex-col justify-end p-4 text-center">
-            <h3 className="text-[#E4B343] font-bold text-lg mb-1">
-              Stay Protected When You Source
-            </h3>
-            <p className="text-gray-300 text-sm leading-snug">
-              Instantly check supplier trust scores and red flags before you buy.
-            </p>
-          </div>
-        </div>
-
-        {/* === DASHBOARD === */}
-        <div className="bg-[#111] border border-gray-800 rounded-xl overflow-hidden shadow-lg">
-          <img
-            src="/dashboard-preview.png"
-            alt="Dashboard preview"
-            className="w-full h-auto object-cover"
-          />
-          <p className="text-sm text-gray-400 p-3 text-center">
-            Data-driven insights, updates, and trusted supplier access
+            Make your investment back within the first month of consistent
+            sales.
           </p>
         </div>
       </section>
@@ -194,7 +164,9 @@ export default function SignUpPage() {
           <div className="flex items-start gap-3">
             <span className="text-[#E4B343] text-2xl">💡</span>
             <div>
-              <h3 className="font-semibold text-white">AI Mentor for Resellers</h3>
+              <h3 className="font-semibold text-white">
+                AI Mentor for Resellers
+              </h3>
               <p className="text-gray-400 text-sm">
                 Get instant answers with strategy, data, and long-term planning
                 behind every response.
@@ -205,7 +177,9 @@ export default function SignUpPage() {
           <div className="flex items-start gap-3">
             <span className="text-[#E4B343] text-2xl">📋</span>
             <div>
-              <h3 className="font-semibold text-white">Ongoing Supplier Lists</h3>
+              <h3 className="font-semibold text-white">
+                Ongoing Supplier Lists
+              </h3>
               <p className="text-gray-400 text-sm">
                 Updated wholesale & liquidation sources, verified and ranked for
                 ROI.
@@ -216,7 +190,9 @@ export default function SignUpPage() {
           <div className="flex items-start gap-3">
             <span className="text-[#E4B343] text-2xl">🛡️</span>
             <div>
-              <h3 className="font-semibold text-white">Scam Avoidance Training</h3>
+              <h3 className="font-semibold text-white">
+                Scam Avoidance Training
+              </h3>
               <p className="text-gray-400 text-sm">
                 Learn how to vet suppliers and protect your funds while finding
                 deals.
@@ -225,9 +201,25 @@ export default function SignUpPage() {
           </div>
 
           <div className="flex items-start gap-3">
+            <span className="text-[#E4B343] text-2xl">🌐</span>
+            <div>
+              <h3 className="font-semibold text-white">
+                AI-Powered Website Analyzer
+              </h3>
+              <p className="text-gray-400 text-sm">
+                Instantly scan supplier websites for trust signals, SSL status,
+                scam indicators, and authenticity markers — no domain age
+                required.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-3">
             <span className="text-[#E4B343] text-2xl">🏛️</span>
             <div>
-              <h3 className="font-semibold text-white">Business Setup Guides</h3>
+              <h3 className="font-semibold text-white">
+                Business Setup Guides
+              </h3>
               <p className="text-gray-400 text-sm">
                 Structure your LLC, taxes, and operations correctly for scaling.
               </p>
@@ -237,7 +229,9 @@ export default function SignUpPage() {
           <div className="flex items-start gap-3">
             <span className="text-[#E4B343] text-2xl">🚚</span>
             <div>
-              <h3 className="font-semibold text-white">Shipping & Pallet Mastery</h3>
+              <h3 className="font-semibold text-white">
+                Shipping & Pallet Mastery
+              </h3>
               <p className="text-gray-400 text-sm">
                 Learn how to buy, ship, and receive pallets with trusted freight
                 contacts.
@@ -248,24 +242,12 @@ export default function SignUpPage() {
           <div className="flex items-start gap-3">
             <span className="text-[#E4B343] text-2xl">🎥</span>
             <div>
-              <h3 className="font-semibold text-white">Streaming & Supply Kit</h3>
-              <p className="text-gray-400 text-sm">
-                Recommended gear and workflows to run high-converting Whatnot shows
-                like a pro.
-              </p>
-            </div>
-          </div>
-
-          {/* 🧠 NEW ITEM */}
-          <div className="flex items-start gap-3 md:col-span-2 justify-center mt-4">
-            <span className="text-[#E4B343] text-2xl">🤖</span>
-            <div>
               <h3 className="font-semibold text-white">
-                AI-Powered Vendor Website Scam Detection
+                Streaming & Supply Kit
               </h3>
               <p className="text-gray-400 text-sm">
-                Automatically analyze supplier websites for legitimacy, SSL
-                security, domain age, and hidden red flags before you buy.
+                Recommended gear and workflows to run high-converting Whatnot
+                shows like a pro.
               </p>
             </div>
           </div>
@@ -322,12 +304,14 @@ export default function SignUpPage() {
           </p>
           <p className="text-[#E4B343] mt-3 font-semibold">— Amanda R.</p>
         </div>
+
         <div className="bg-[#111] p-6 rounded-xl border border-gray-800 shadow-md">
           <p className="italic text-gray-400">
             “The Supplier Vault saved me weeks of sourcing time.”
           </p>
           <p className="text-[#E4B343] mt-3 font-semibold">— Chris M.</p>
         </div>
+
         <div className="bg-[#111] p-6 rounded-xl border border-gray-800 shadow-md">
           <p className="italic text-gray-400">
             “Worth every penny. Finally a mentor who gets reselling!”
@@ -342,7 +326,8 @@ export default function SignUpPage() {
           Want early access to new AI features?
         </h3>
         <p className="text-gray-300 mb-4">
-          Join the waitlist and be first to test beta tools and supplier updates.
+          Join the waitlist and be first to test beta tools and supplier
+          updates.
         </p>
 
         <div className="flex flex-col md:flex-row justify-center gap-4 items-center">
@@ -363,6 +348,7 @@ export default function SignUpPage() {
         </div>
       </section>
 
+      {/* === STATIC CONTACT EMAIL + COPYRIGHT === */}
       <footer className="text-center text-gray-400 mt-12 pb-6 text-sm border-t border-gray-800 pt-4 w-full">
         <p>
           Contact:{" "}
@@ -374,7 +360,8 @@ export default function SignUpPage() {
           </a>
         </p>
         <p className="mt-1">
-          &copy; {new Date().getFullYear()} My Reseller Mentor. All rights reserved.
+          &copy; {new Date().getFullYear()} My Reseller Mentor. All rights
+          reserved.
         </p>
       </footer>
     </main>
