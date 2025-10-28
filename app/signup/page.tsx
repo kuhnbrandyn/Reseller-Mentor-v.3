@@ -86,6 +86,30 @@ export default function SignUpPage() {
         if (email) {
           localStorage.setItem("user_email", email.trim());
         }
+
+        // ✅ STEP 4: Create Stripe Checkout Session
+        try {
+          const res = await fetch("/api/checkout", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              email: email.trim(),
+              priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_ID, // replace with your live price ID
+              promoCode: promoCode.trim(), // passes entered promo
+            }),
+          });
+
+          const data = await res.json();
+          if (data.url) {
+            window.location.href = data.url; // redirect to Stripe Checkout
+            return;
+          } else {
+            console.error("Checkout error:", data.error);
+          }
+        } catch (err) {
+          console.error("Error creating checkout session:", err);
+        }
+
         router.push(`/terms?email=${encodeURIComponent(email)}`);
         return;
       }
@@ -161,13 +185,10 @@ export default function SignUpPage() {
         </h2>
 
         <div className="grid md:grid-cols-2 gap-8 text-left text-gray-300">
-          {/* Core items */}
           <div className="flex items-start gap-3">
             <span className="text-[#E4B343] text-2xl">💡</span>
             <div>
-              <h3 className="font-semibold text-white">
-                AI Mentor for Resellers
-              </h3>
+              <h3 className="font-semibold text-white">AI Mentor for Resellers</h3>
               <p className="text-gray-400 text-sm">
                 Get instant answers with strategy, data, and long-term planning
                 behind every response.
@@ -178,9 +199,7 @@ export default function SignUpPage() {
           <div className="flex items-start gap-3">
             <span className="text-[#E4B343] text-2xl">📋</span>
             <div>
-              <h3 className="font-semibold text-white">
-                Ongoing Supplier Lists
-              </h3>
+              <h3 className="font-semibold text-white">Ongoing Supplier Lists</h3>
               <p className="text-gray-400 text-sm">
                 Updated wholesale & liquidation sources, verified and ranked for
                 ROI.
@@ -191,9 +210,7 @@ export default function SignUpPage() {
           <div className="flex items-start gap-3">
             <span className="text-[#E4B343] text-2xl">🛡️</span>
             <div>
-              <h3 className="font-semibold text-white">
-                Scam Avoidance Training
-              </h3>
+              <h3 className="font-semibold text-white">Scam Avoidance Training</h3>
               <p className="text-gray-400 text-sm">
                 Learn how to vet suppliers and protect your funds while finding
                 deals.
@@ -204,9 +221,7 @@ export default function SignUpPage() {
           <div className="flex items-start gap-3">
             <span className="text-[#E4B343] text-2xl">🏛️</span>
             <div>
-              <h3 className="font-semibold text-white">
-                Business Setup Guides
-              </h3>
+              <h3 className="font-semibold text-white">Business Setup Guides</h3>
               <p className="text-gray-400 text-sm">
                 Structure your LLC, taxes, and operations correctly for scaling.
               </p>
@@ -216,9 +231,7 @@ export default function SignUpPage() {
           <div className="flex items-start gap-3">
             <span className="text-[#E4B343] text-2xl">🚚</span>
             <div>
-              <h3 className="font-semibold text-white">
-                Shipping & Pallet Mastery
-              </h3>
+              <h3 className="font-semibold text-white">Shipping & Pallet Mastery</h3>
               <p className="text-gray-400 text-sm">
                 Learn how to buy, ship, and receive pallets with trusted freight
                 contacts.
@@ -229,9 +242,7 @@ export default function SignUpPage() {
           <div className="flex items-start gap-3">
             <span className="text-[#E4B343] text-2xl">🎥</span>
             <div>
-              <h3 className="font-semibold text-white">
-                Streaming & Supply Kit
-              </h3>
+              <h3 className="font-semibold text-white">Streaming & Supply Kit</h3>
               <p className="text-gray-400 text-sm">
                 Recommended gear and workflows to run high-converting Whatnot
                 shows like a pro.
@@ -240,7 +251,6 @@ export default function SignUpPage() {
           </div>
         </div>
 
-        {/* Featured AI tool row */}
         <div className="mt-12 bg-gradient-to-r from-[#E4B343]/10 via-[#E4B343]/5 to-transparent border border-[#E4B343]/30 rounded-2xl p-6 hover:border-[#E4B343]/70 transition-all duration-300">
           <div className="flex flex-col md:flex-row items-center justify-center gap-4 text-center md:text-left">
             <span className="text-[#E4B343] text-3xl">🤖</span>
@@ -291,10 +301,7 @@ export default function SignUpPage() {
         </button>
         <p className="text-gray-400 mt-6 text-sm">
           Already have an account?{" "}
-          <a
-            href="/login"
-            className="text-[#E4B343] underline hover:text-[#d9a630]"
-          >
+          <a href="/login" className="text-[#E4B343] underline hover:text-[#d9a630]">
             Log In
           </a>
         </p>
@@ -371,4 +378,5 @@ export default function SignUpPage() {
     </main>
   );
 }
+
 
