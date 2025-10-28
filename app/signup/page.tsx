@@ -154,105 +154,95 @@ export default function SignUpPage() {
         </div>
       </section>
 
-      {/* === WHAT'S INCLUDED === */}
-      <section className="max-w-5xl w-full px-6 text-center mb-16">
-        <h2 className="text-3xl font-bold text-[#E4B343] mb-10">
-          What’s Included
-        </h2>
+     {/* === WHAT'S INCLUDED === */}
+<section className="max-w-5xl w-full px-6 text-center mb-16">
+  <h2 className="text-3xl font-bold text-[#E4B343] mb-10">
+    What’s Included
+  </h2>
 
-        <div className="grid md:grid-cols-2 gap-8 text-left text-gray-300">
-          <div className="flex items-start gap-3">
-            <span className="text-[#E4B343] text-2xl">💡</span>
-            <div>
-              <h3 className="font-semibold text-white">
-                AI Mentor for Resellers
-              </h3>
-              <p className="text-gray-400 text-sm">
-                Get instant answers with strategy, data, and long-term planning
-                behind every response.
-              </p>
-            </div>
-          </div>
+  <div className="grid md:grid-cols-2 gap-8 text-left text-gray-300">
+    {/* Core items */}
+    <div className="flex items-start gap-3">
+      <span className="text-[#E4B343] text-2xl">💡</span>
+      <div>
+        <h3 className="font-semibold text-white">AI Mentor for Resellers</h3>
+        <p className="text-gray-400 text-sm">
+          Get instant answers with strategy, data, and long-term planning
+          behind every response.
+        </p>
+      </div>
+    </div>
 
-          <div className="flex items-start gap-3">
-            <span className="text-[#E4B343] text-2xl">📋</span>
-            <div>
-              <h3 className="font-semibold text-white">
-                Ongoing Supplier Lists
-              </h3>
-              <p className="text-gray-400 text-sm">
-                Updated wholesale & liquidation sources, verified and ranked for
-                ROI.
-              </p>
-            </div>
-          </div>
+    <div className="flex items-start gap-3">
+      <span className="text-[#E4B343] text-2xl">📋</span>
+      <div>
+        <h3 className="font-semibold text-white">Ongoing Supplier Lists</h3>
+        <p className="text-gray-400 text-sm">
+          Updated wholesale & liquidation sources, verified and ranked for ROI.
+        </p>
+      </div>
+    </div>
 
-          <div className="flex items-start gap-3">
-            <span className="text-[#E4B343] text-2xl">🛡️</span>
-            <div>
-              <h3 className="font-semibold text-white">
-                Scam Avoidance Training
-              </h3>
-              <p className="text-gray-400 text-sm">
-                Learn how to vet suppliers and protect your funds while finding
-                deals.
-              </p>
-            </div>
-          </div>
+    <div className="flex items-start gap-3">
+      <span className="text-[#E4B343] text-2xl">🛡️</span>
+      <div>
+        <h3 className="font-semibold text-white">Scam Avoidance Training</h3>
+        <p className="text-gray-400 text-sm">
+          Learn how to vet suppliers and protect your funds while finding deals.
+        </p>
+      </div>
+    </div>
 
-          <div className="flex items-start gap-3">
-            <span className="text-[#E4B343] text-2xl">🌐</span>
-            <div>
-              <h3 className="font-semibold text-white">
-                AI-Powered Website Analyzer
-              </h3>
-              <p className="text-gray-400 text-sm">
-                Instantly scan supplier websites for trust signals, SSL status,
-                scam indicators, and authenticity markers — no domain age
-                required.
-              </p>
-            </div>
-          </div>
+    <div className="flex items-start gap-3">
+      <span className="text-[#E4B343] text-2xl">🏛️</span>
+      <div>
+        <h3 className="font-semibold text-white">Business Setup Guides</h3>
+        <p className="text-gray-400 text-sm">
+          Structure your LLC, taxes, and operations correctly for scaling.
+        </p>
+      </div>
+    </div>
 
-          <div className="flex items-start gap-3">
-            <span className="text-[#E4B343] text-2xl">🏛️</span>
-            <div>
-              <h3 className="font-semibold text-white">
-                Business Setup Guides
-              </h3>
-              <p className="text-gray-400 text-sm">
-                Structure your LLC, taxes, and operations correctly for scaling.
-              </p>
-            </div>
-          </div>
+    <div className="flex items-start gap-3">
+      <span className="text-[#E4B343] text-2xl">🚚</span>
+      <div>
+        <h3 className="font-semibold text-white">Shipping & Pallet Mastery</h3>
+        <p className="text-gray-400 text-sm">
+          Learn how to buy, ship, and receive pallets with trusted freight
+          contacts.
+        </p>
+      </div>
+    </div>
 
-          <div className="flex items-start gap-3">
-            <span className="text-[#E4B343] text-2xl">🚚</span>
-            <div>
-              <h3 className="font-semibold text-white">
-                Shipping & Pallet Mastery
-              </h3>
-              <p className="text-gray-400 text-sm">
-                Learn how to buy, ship, and receive pallets with trusted freight
-                contacts.
-              </p>
-            </div>
-          </div>
+    <div className="flex items-start gap-3">
+      <span className="text-[#E4B343] text-2xl">🎥</span>
+      <div>
+        <h3 className="font-semibold text-white">Streaming & Supply Kit</h3>
+        <p className="text-gray-400 text-sm">
+          Recommended gear and workflows to run high-converting Whatnot
+          shows like a pro.
+        </p>
+      </div>
+    </div>
+  </div>
 
-          <div className="flex items-start gap-3">
-            <span className="text-[#E4B343] text-2xl">🎥</span>
-            <div>
-              <h3 className="font-semibold text-white">
-                Streaming & Supply Kit
-              </h3>
-              <p className="text-gray-400 text-sm">
-                Recommended gear and workflows to run high-converting Whatnot
-                shows like a pro.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
+  {/* Featured AI tool row */}
+  <div className="mt-12 bg-gradient-to-r from-[#E4B343]/10 via-[#E4B343]/5 to-transparent border border-[#E4B343]/30 rounded-2xl p-6 hover:border-[#E4B343]/70 transition-all duration-300">
+    <div className="flex flex-col md:flex-row items-center justify-center gap-4 text-center md:text-left">
+      <span className="text-[#E4B343] text-3xl">🤖</span>
+      <div>
+        <h3 className="font-semibold text-[#E4B343] text-xl">
+          AI-Powered Vendor Website Scam Detection
+        </h3>
+        <p className="text-gray-400 text-sm mt-1">
+          Automatically analyze supplier websites for legitimacy, SSL security,
+          and hidden red flags before you buy — stay protected when sourcing.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
 
       {/* === SIGNUP FORM === */}
       <section className="bg-[#111] border border-[#E4B343]/40 rounded-2xl p-10 w-[90%] max-w-md text-center shadow-lg mb-10">
