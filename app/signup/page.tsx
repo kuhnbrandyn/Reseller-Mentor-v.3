@@ -19,6 +19,7 @@ export default function SignUpPage() {
     setLoading(true);
 
     try {
+      // ✅ STEP 1: Check if profile exists
       const { data: existingProfile, error: profileError } = await supabase
         .from("profiles")
         .select("payment_status")
@@ -40,6 +41,7 @@ export default function SignUpPage() {
         }
       }
 
+      // ✅ STEP 2: Check if user already exists in Auth
       const { data: adminData, error: userError } =
         await supabase.auth.admin.listUsers();
 
@@ -55,6 +57,7 @@ export default function SignUpPage() {
         }
       }
 
+      // ✅ STEP 3: New signup (does not exist anywhere)
       if (promoCode === "ADMINFREE" || promoCode === "TESTACCESS") {
         alert("Promo accepted! Redirecting to dashboard...");
         router.push("/dashboard");
@@ -78,6 +81,7 @@ export default function SignUpPage() {
       }
 
       if (data?.user) {
+        // 🧹 Reset chat thread and save email for chat widget
         localStorage.removeItem("thread_ts");
         if (email) {
           localStorage.setItem("user_email", email.trim());
@@ -117,9 +121,8 @@ export default function SignUpPage() {
     }
   };
 
-  // ✅ Chat visibility patch
+  // ✅ Make Slack chat visible on mobile
   useEffect(() => {
-    // Ensure chat widget always visible, even on mobile
     const chatBox = document.getElementById("slack-chat-widget");
     if (chatBox) {
       chatBox.style.display = "block";
@@ -165,16 +168,16 @@ export default function SignUpPage() {
       </section>
 
       {/* === WHAT'S INCLUDED === */}
-      {/* (unchanged section) */}
+      {/* (unchanged) */}
 
       {/* === SIGNUP FORM === */}
-      {/* (unchanged section) */}
+      {/* (unchanged) */}
 
       {/* === TESTIMONIALS === */}
-      {/* (unchanged section) */}
+      {/* (unchanged) */}
 
       {/* === WAITLIST === */}
-      {/* (unchanged section) */}
+      {/* (unchanged) */}
 
       {/* === STATIC CONTACT EMAIL + COPYRIGHT === */}
       <footer className="text-center text-gray-400 mt-12 pb-6 text-sm border-t border-gray-800 pt-4 w-full">
@@ -198,7 +201,6 @@ export default function SignUpPage() {
         id="slack-chat-widget"
         className="fixed bottom-5 right-5 z-50 max-w-[90vw]"
       >
-        {/* Example: if you load Slack widget via script */}
         <iframe
           src="https://your-slack-chat-url"
           className="w-[350px] h-[450px] max-w-full rounded-xl border border-[#E4B343]/30"
