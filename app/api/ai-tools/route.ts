@@ -40,39 +40,61 @@ export async function POST(req: Request) {
     }
 
        /* -----------------------------
-       3️⃣  Check usage in Supabase
-    ------------------------------ */
-    const { data: usage } = await supabase
-      .from("ai_usage")
-      .select("*")
-      .eq("user_id", userId)
-      .maybeSingle();
+   3️⃣  Check usage in Supabase (robust + auto-create)
+------------------------------ */
+const { data: usageRow, error: usageError } = await supabase
+  .from("ai_usage")
+  .select("id, user_id, total_cost_usd, total_tokens, last_reset")
+  .eq("user_id", userId)
+  .maybeSingle();
 
-    // ✅ Ensure numeric type, even if Supabase stores as string
-    const currentSpent = Number(usage?.total_cost_usd ?? 0);
-    const usagePct = (currentSpent / ANNUAL_CAP) * 100;
+if (usageError) {
+  console.error("❌ Supabase fetch error:", usageError);
+}
 
-    // ✅ Enforce hard cap but keep unified JSON shape (so frontend sees it)
-    if (currentSpent >= ANNUAL_CAP) {
-      console.log("🚫 USER BLOCKED:", userId, currentSpent);
+let currentSpent = 0;
 
-      return NextResponse.json(
-        {
-          ok: false,
-          tool: "ai-mentor",
-          result: null,
-          usage: {
-            spent_usd: currentSpent.toFixed(2),
-            usage_pct: 100,
-            capped: true,
-            near_cap: false,
-          },
-          message:
-            "⛔ You’ve hit your $100 annual AI limit. Please renew or upgrade.",
-        },
-        { status: 200 } // keep 200 so frontend receives it normally
-      );
-    }
+if (!usageRow) {
+  // 🧱 Create record if it doesn't exist
+  console.log("🆕 Creating new usage record for:", userId);
+  const { error: insertError } = await supabase.from("ai_usage").insert([
+    {
+      user_id: userId,
+      total_tokens: 0,
+      total_cost_usd: 0,
+      last_reset: new Date(),
+    },
+  ]);
+  if (insertError) console.error("❌ Failed to insert usage record:", insertError);
+} else {
+  currentSpent = parseFloat(usageRow.total_cost_usd) || 0;
+}
+
+const usagePct = (currentSpent / ANNUAL_CAP) * 100;
+
+console.log("🧠 USAGE CHECK:", { userId, currentSpent, usagePct });
+
+if (currentSpent >= ANNUAL_CAP) {
+  console.log("🚫 USER BLOCKED:", userId, currentSpent);
+
+  return NextResponse.json(
+    {
+      ok: false,
+      tool: "ai-mentor",
+      result: null,
+      usage: {
+        spent_usd: currentSpent.toFixed(2),
+        usage_pct: 100,
+        capped: true,
+        near_cap: false,
+      },
+      message:
+        "⛔ You’ve hit your $100 annual AI limit. Please renew or upgrade.",
+    },
+    { status: 200 } // ✅ so frontend catches it normally
+  );
+}
+
 
 
     /* -----------------------------
