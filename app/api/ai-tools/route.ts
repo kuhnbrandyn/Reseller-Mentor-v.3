@@ -166,12 +166,13 @@ Rules:
     const tokensOut = completion.usage?.completion_tokens || 0;
     const totalCost = tokensIn * INPUT_RATE + tokensOut * OUTPUT_RATE;
 
-    await supabase.from("ai_usage").upsert({
-      user_id: userId,
-      total_tokens: (usage?.total_tokens || 0) + tokensIn + tokensOut,
-      total_cost_usd: currentSpent + totalCost,
-      last_reset: usage?.last_reset || new Date(),
-    });
+   await supabase.from("ai_usage").upsert({
+  user_id: userId,
+  total_tokens: (usageRow?.total_tokens || 0) + tokensIn + tokensOut,
+  total_cost_usd: currentSpent + totalCost,
+  last_reset: usageRow?.last_reset || new Date(),
+});
+
 
     const newSpent = currentSpent + totalCost;
     const newPct = Math.min((newSpent / ANNUAL_CAP) * 100, 100);
