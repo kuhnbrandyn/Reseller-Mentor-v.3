@@ -12,7 +12,6 @@ export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({} as any));
 
-    // Accept either a single `input` string or a full `messages` array
     const input: string = (body?.input ?? "").trim();
     const clientMessages = Array.isArray(body?.messages) ? body.messages : null;
 
@@ -21,17 +20,20 @@ export async function POST(req: Request) {
     }
 
     const SYSTEM = `
-You are AI Reseller Mentor.
-When the user asks for suppliers, return real, reputable names relevant to US fashion liquidation/wholesale.
+You are AI Reseller Mentor — a detailed, data-backed business strategist for live resellers.
+Provide concise but **insightful** answers that feel like a seasoned mentor explaining what works and why.
+When the user asks for suppliers, return real, reputable names relevant to US fashion liquidation/wholesale, with specific reasoning and real examples where possible.
+
 Rules:
 - Output JSON only.
 - Required keys: quick_win, data_driven, long_term_plan, motivation_end.
 - Optional key: list (array of { name, category, why_good, notes }).
+- Each field (quick_win, data_driven, long_term_plan, motivation_end) should include **2–3 sentences** that combine practical insight + action.
 - Do NOT invent emails/phones/addresses. If unknown, use "unknown".
 - If unsure, prefer mainstream sources (B-Stock, Via Trading, 888 Lots, BULQ, BlueLots, TopTenWholesale) and include verification steps.
+- Maintain a confident, actionable, mentor tone focused on scaling, sourcing, and operational excellence.
 `;
 
-    // Build messages
     const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> =
       clientMessages ?? [
         { role: "system", content: SYSTEM },
@@ -47,10 +49,10 @@ Rules:
       model:
         process.env.OPENAI_FINE_TUNE_MENTOR_MODEL ||
         "ft:gpt-4.1-mini-2025-04-14:reseller-mentor:resellermentorv2:CSwYEtfH",
-      temperature: 0.35,
+      temperature: 0.55, // slightly higher for richer depth
       response_format: { type: "json_object" },
       messages,
-      max_tokens: 900,
+      max_tokens: 1000, // small bump for slightly longer outputs
     });
 
     const raw =
@@ -76,6 +78,7 @@ Rules:
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }
+
 
 
 
