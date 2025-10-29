@@ -67,7 +67,7 @@ if (!usageRow) {
   ]);
   if (insertError) console.error("❌ Failed to insert usage record:", insertError);
 } else {
-  currentSpent = parseFloat(usageRow.total_cost_usd) || 0;
+  const currentSpent = Number(usageRow?.total_cost_usd ?? 0);
 }
 
 const usagePct = (currentSpent / ANNUAL_CAP) * 100;
