@@ -39,7 +39,7 @@ export async function POST(req: Request) {
       );
     }
 
-    /* -----------------------------
+       /* -----------------------------
        3️⃣  Check usage in Supabase
     ------------------------------ */
     const { data: usage } = await supabase
@@ -48,21 +48,32 @@ export async function POST(req: Request) {
       .eq("user_id", userId)
       .maybeSingle();
 
-    const currentSpent = usage?.total_cost_usd ?? 0;
+    // ✅ Ensure numeric type, even if Supabase stores as string
+    const currentSpent = Number(usage?.total_cost_usd ?? 0);
     const usagePct = (currentSpent / ANNUAL_CAP) * 100;
 
+    // ✅ Enforce hard cap but keep unified JSON shape (so frontend sees it)
     if (currentSpent >= ANNUAL_CAP) {
+      console.log("🚫 USER BLOCKED:", userId, currentSpent);
+
       return NextResponse.json(
         {
-          error: "Usage limit reached",
+          ok: false,
+          tool: "ai-mentor",
+          result: null,
+          usage: {
+            spent_usd: currentSpent.toFixed(2),
+            usage_pct: 100,
+            capped: true,
+            near_cap: false,
+          },
           message:
-            "You’ve hit your $100 annual AI limit. Please renew or upgrade.",
-          usage_pct: 100,
-          capped: true,
+            "⛔ You’ve hit your $100 annual AI limit. Please renew or upgrade.",
         },
-        { status: 403 }
+        { status: 200 } // keep 200 so frontend receives it normally
       );
     }
+
 
     /* -----------------------------
        4️⃣  Build AI Mentor Prompt
