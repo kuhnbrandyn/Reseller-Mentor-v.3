@@ -69,12 +69,34 @@ export default function AIMentor() {
       if (data?.result) {
         const r = data.result;
 
-        // 🧩 Step 2: Render supplier list dynamically
+        // 🧩 Step 2: Show supplier list only when relevant
         let supplierList = "";
-        if (r.list && Array.isArray(r.list) && r.list.length > 0) {
+        const lowerInput = userMessage.content.toLowerCase();
+        const supplierKeywords = [
+          "supplier",
+          "suppliers",
+          "wholesaler",
+          "wholesalers",
+          "liquidation",
+          "sourcing",
+          "vendor",
+          "vendors",
+        ];
+        const isSupplierQuery = supplierKeywords.some((kw) =>
+          lowerInput.includes(kw)
+        );
+
+        if (
+          isSupplierQuery &&
+          r.list &&
+          Array.isArray(r.list) &&
+          r.list.length > 0
+        ) {
           supplierList = "\n\n📦 **Suggested Suppliers:**\n";
           r.list.forEach((s: any, i: number) => {
-            supplierList += `\n${i + 1}. **${s.name}** — ${s.category}\n   🔹 ${s.why_good}\n   📝 ${s.notes}\n`;
+            supplierList += `\n${i + 1}. **${s.name}** — ${s.category}\n   🔹 ${
+              s.why_good
+            }\n   📝 ${s.notes}\n`;
           });
         }
 
@@ -175,5 +197,6 @@ ${supplierList}
     </main>
   );
 }
+
 
 
