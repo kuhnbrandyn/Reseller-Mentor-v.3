@@ -2,11 +2,12 @@
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
 
 export const runtime = "nodejs";
 
 /* -----------------------------
-   1️⃣  Initialize Clients & Config
+   1️⃣ Initialize Clients & Config
 ------------------------------ */
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY!,
@@ -14,13 +15,13 @@ const openai = new OpenAI({
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY! // server-side key only
+  process.env.SUPABASE_SERVICE_ROLE_KEY! // server-side role key only
 );
 
 // Approximate OpenAI rates for gpt-4.1-mini fine-tune
 const INPUT_RATE = 0.00015; // per token USD
 const OUTPUT_RATE = 0.0006; // per token USD
-const ANNUAL_CAP = 100; // $100 per user per year
+const ANNUAL_CAP = 100; // USD cap per user per year
 
 /* -----------------------------
    2️⃣  API Handler
@@ -64,7 +65,7 @@ export async function POST(req: Request) {
     }
 
     /* -----------------------------
-       4️⃣  Build AI Mentor prompt
+       4️⃣  Build AI Mentor Prompt
     ------------------------------ */
     const SYSTEM = `
 You are AI Reseller Mentor — a detailed, data-backed business strategist for live resellers.
@@ -81,16 +82,13 @@ Rules:
 - Maintain a confident, actionable, mentor tone focused on scaling, sourcing, and operational excellence.
 `;
 
-    import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
-
-const messages: ChatCompletionMessageParam[] = [
-  { role: "system", content: SYSTEM },
-  { role: "user", content: input },
-];
-
+    const messages: ChatCompletionMessageParam[] = [
+      { role: "system", content: SYSTEM },
+      { role: "user", content: input },
+    ];
 
     /* -----------------------------
-       5️⃣  Run OpenAI completion
+       5️⃣  Run OpenAI Completion
     ------------------------------ */
     const completion = await openai.chat.completions.create({
       model:
@@ -120,7 +118,7 @@ const messages: ChatCompletionMessageParam[] = [
     }
 
     /* -----------------------------
-       6️⃣  Calculate token cost & update Supabase
+       6️⃣  Calculate Token Cost & Update Supabase
     ------------------------------ */
     const tokensIn = completion.usage?.prompt_tokens || 0;
     const tokensOut = completion.usage?.completion_tokens || 0;
@@ -137,7 +135,7 @@ const messages: ChatCompletionMessageParam[] = [
     const newPct = Math.min((newSpent / ANNUAL_CAP) * 100, 100);
 
     /* -----------------------------
-       7️⃣  Return mentor output + usage stats
+       7️⃣  Return Mentor Output + Usage Stats
     ------------------------------ */
     return NextResponse.json({
       ok: true,
