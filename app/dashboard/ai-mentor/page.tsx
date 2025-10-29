@@ -1,5 +1,12 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { createClient } from "@supabase/supabase-js";
+
+// ✅ Initialize Supabase (client-side)
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 export default function AIMentor() {
   const [messages, setMessages] = useState([
@@ -11,10 +18,23 @@ export default function AIMentor() {
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [buttonDisabled, setButtonDisabled] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
+
+  /* 🔐 Get Supabase Auth user on load */
+  useEffect(() => {
+    const fetchUser = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user) setUserId(user.id);
+    };
+    fetchUser();
+  }, []);
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim()) return;
+    if (!input.trim() || buttonDisabled || !userId) return;
 
     const userMessage = { role: "user", content: input };
     setMessages((prev) => [...prev, userMessage]);
@@ -22,15 +42,30 @@ export default function AIMentor() {
     setLoading(true);
 
     try {
-      // ✅ Send to your AI Mentor API route
       const res = await fetch("/api/ai-tools", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ input: userMessage.content }),
+        body: JSON.stringify({
+          input: userMessage.content,
+          user_id: userId,
+        }),
       });
 
       const data = await res.json();
 
+      // ⚠️ Handle near-cap and capped usage
+      if (data?.usage?.near_cap) {
+        alert(
+          `⚠️ You’ve used ${data.usage.usage_pct}% of your yearly AI allowance.`
+        );
+      }
+
+      if (data?.usage?.capped) {
+        alert("⛔ You’ve hit your $100 yearly AI cap.");
+        setButtonDisabled(true);
+      }
+
+      // ✅ If valid result
       if (data?.result) {
         const r = data.result;
         const formatted = `
@@ -99,19 +134,35 @@ export default function AIMentor() {
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask your AI mentor..."
+            placeholder={
+              buttonDisabled
+                ? "Usage limit reached — please renew."
+                : "Ask your AI mentor..."
+            }
             className="flex-1 px-4 py-3 rounded-lg border border-gray-700 bg-transparent text-white focus:outline-none focus:border-[#E4B343]"
+            disabled={buttonDisabled || loading || !userId}
           />
           <button
             type="submit"
-            disabled={loading}
-            className="bg-[#E4B343] text-black px-6 py-3 rounded-lg font-semibold hover:bg-[#d9a630] transition"
+            disabled={loading || buttonDisabled || !userId}
+            className={`px-6 py-3 rounded-lg font-semibold transition ${
+              buttonDisabled
+                ? "bg-gray-600 text-gray-300 cursor-not-allowed"
+                : "bg-[#E4B343] text-black hover:bg-[#d9a630]"
+            }`}
           >
-            Send
+            {buttonDisabled
+              ? "Limit Reached"
+              : !userId
+              ? "Loading..."
+              : loading
+              ? "Sending..."
+              : "Send"}
           </button>
         </form>
       </div>
     </main>
   );
 }
+
 
