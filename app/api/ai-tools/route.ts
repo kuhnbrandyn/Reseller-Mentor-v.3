@@ -39,62 +39,40 @@ export async function POST(req: Request) {
       );
     }
 
-       /* -----------------------------
-   3️⃣  Check usage in Supabase (robust + auto-create)
+ /* -----------------------------
+   3️⃣  Check usage in Supabase (Fixed)
 ------------------------------ */
 const { data: usageRow, error: usageError } = await supabase
   .from("ai_usage")
-  .select("id, user_id, total_cost_usd, total_tokens, last_reset")
+  .select("*")
   .eq("user_id", userId)
   .maybeSingle();
 
 if (usageError) {
-  console.error("❌ Supabase fetch error:", usageError);
+  console.error("❌ Supabase read error:", usageError);
 }
 
-let currentSpent = 0;
-
-if (!usageRow) {
-  // 🧱 Create record if it doesn't exist
-  console.log("🆕 Creating new usage record for:", userId);
-  const { error: insertError } = await supabase.from("ai_usage").insert([
-    {
-      user_id: userId,
-      total_tokens: 0,
-      total_cost_usd: 0,
-      last_reset: new Date(),
-    },
-  ]);
-  if (insertError) console.error("❌ Failed to insert usage record:", insertError);
-} else {
-  const currentSpent = Number(usageRow?.total_cost_usd ?? 0);
-}
-
+const currentSpent = Number(usageRow?.total_cost_usd ?? 0);
 const usagePct = (currentSpent / ANNUAL_CAP) * 100;
 
-console.log("🧠 USAGE CHECK:", { userId, currentSpent, usagePct });
+console.log("💰 Current spent:", currentSpent, "Usage %:", usagePct);
 
-if (currentSpent >= ANNUAL_CAP) {
-  console.log("🚫 USER BLOCKED:", userId, currentSpent);
-
+// ✅ Cap enforcement
+if (!isNaN(currentSpent) && currentSpent >= ANNUAL_CAP) {
+  console.log("🚫 Cap hit — blocking user");
   return NextResponse.json(
     {
-      ok: false,
-      tool: "ai-mentor",
-      result: null,
-      usage: {
-        spent_usd: currentSpent.toFixed(2),
-        usage_pct: 100,
-        capped: true,
-        near_cap: false,
-      },
+      error: "Usage limit reached",
       message:
         "⛔ You’ve hit your $100 annual AI limit. Please renew or upgrade.",
+      usage: {
+        usage_pct: 100,
+        capped: true,
+      },
     },
-    { status: 200 } // ✅ so frontend catches it normally
+    { status: 403 }
   );
 }
-
 
 
     /* -----------------------------
