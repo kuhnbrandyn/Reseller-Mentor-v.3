@@ -68,6 +68,16 @@ export default function AIMentor() {
       // ✅ If valid result
       if (data?.result) {
         const r = data.result;
+
+        // 🧩 Step 2: Render supplier list dynamically
+        let supplierList = "";
+        if (r.list && Array.isArray(r.list) && r.list.length > 0) {
+          supplierList = "\n\n📦 **Suggested Suppliers:**\n";
+          r.list.forEach((s: any, i: number) => {
+            supplierList += `\n${i + 1}. **${s.name}** — ${s.category}\n   🔹 ${s.why_good}\n   📝 ${s.notes}\n`;
+          });
+        }
+
         const formatted = `
 💡 **Quick Win:** ${r.quick_win || "N/A"}
 
@@ -76,6 +86,7 @@ export default function AIMentor() {
 🚀 **Long Term Plan:** ${r.long_term_plan || "N/A"}
 
 🔥 **Motivation:** ${r.motivation_end || "Stay consistent!"}
+${supplierList}
         `.trim();
 
         setMessages((prev) => [
