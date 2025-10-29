@@ -81,10 +81,13 @@ Rules:
 - Maintain a confident, actionable, mentor tone focused on scaling, sourcing, and operational excellence.
 `;
 
-    const messages = [
-      { role: "system", content: SYSTEM },
-      { role: "user", content: input },
-    ];
+    import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
+
+const messages: ChatCompletionMessageParam[] = [
+  { role: "system", content: SYSTEM },
+  { role: "user", content: input },
+];
+
 
     /* -----------------------------
        5️⃣  Run OpenAI completion
