@@ -1,15 +1,13 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 
-// ✅ Initialize Stripe (auto uses your account's default API version)
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { email, priceId, promoCode } = body; // ✅ added promoCode
+    const { email, priceId, promoCode } = body;
 
-    // === Input validation ===
     if (!email) {
       return NextResponse.json({ error: "Missing email" }, { status: 400 });
     }
@@ -20,8 +18,9 @@ export async function POST(req: Request) {
     console.log("✅ Creating checkout for:", email, "using price:", priceId);
     console.log("Promo code received:", promoCode || "none");
 
-    // === Optional: Look up promotion code ===
-    let discount = null;
+    // === 🆕 Look up promotion code and capture ID ===
+    let promotionCodeId: string | null = null;
+
     if (promoCode) {
       const promo = await stripe.promotionCodes.list({
         code: promoCode.trim(),
@@ -29,30 +28,27 @@ export async function POST(req: Request) {
       });
 
       if (promo.data.length > 0) {
-        discount = promo.data[0].id;
-        console.log("✅ Promo code found:", promoCode);
+        promotionCodeId = promo.data[0].id;
+        console.log("✅ Promo code found:", promoCode, "ID:", promotionCodeId);
       } else {
         console.warn("⚠️ Promo code not found or inactive:", promoCode);
       }
     }
 
-    console.log("🔍 Debug Info:");
-    console.log("STRIPE_SECRET_KEY present:", !!process.env.STRIPE_SECRET_KEY);
-    console.log("Price ID received:", priceId);
-    console.log("Base URL:", process.env.NEXT_PUBLIC_BASE_URL);
-
-    // === Create Stripe Checkout Session ===
+    // === Create Checkout Session ===
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
       payment_method_types: ["card"],
       customer_email: email,
       line_items: [{ price: priceId, quantity: 1 }],
 
-      // 🆕 NEW LINE: Allow manual promo code entry on the Stripe checkout page
+      // ✅ Enables manual entry
       allow_promotion_codes: true,
 
-      // 🆕 Existing logic still applies an automatic discount if a valid promo was found
-      discounts: discount ? [{ promotion_code: discount }] : undefined,
+      // ✅ Auto-applies promo if valid code entered on your site
+      discounts: promotionCodeId
+        ? [{ promotion_code: promotionCodeId }]
+        : undefined,
 
       success_url: `${process.env.NEXT_PUBLIC_BASE_URL}/dashboard?success=true`,
       cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL}/signup?canceled=true`,
@@ -68,7 +64,6 @@ export async function POST(req: Request) {
     );
   }
 }
-
 
 
 
