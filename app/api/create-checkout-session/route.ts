@@ -47,7 +47,13 @@ export async function POST(req: Request) {
       payment_method_types: ["card"],
       customer_email: email,
       line_items: [{ price: priceId, quantity: 1 }],
-      discounts: discount ? [{ promotion_code: discount }] : undefined, // ✅ only applies if valid promo
+
+      // 🆕 NEW LINE: Allow manual promo code entry on the Stripe checkout page
+      allow_promotion_codes: true,
+
+      // 🆕 Existing logic still applies an automatic discount if a valid promo was found
+      discounts: discount ? [{ promotion_code: discount }] : undefined,
+
       success_url: `${process.env.NEXT_PUBLIC_BASE_URL}/dashboard?success=true`,
       cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL}/signup?canceled=true`,
     });
@@ -62,7 +68,6 @@ export async function POST(req: Request) {
     );
   }
 }
-
 
 
 
