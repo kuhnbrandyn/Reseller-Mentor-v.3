@@ -19,7 +19,7 @@ export async function POST(req: Request) {
     console.log("Promo code received:", promoCode || "none");
 
     // === Look up promotion code ===
-    let couponId: string | null = null;
+    let promotionCodeId: string | null = null;
 
     if (promoCode) {
       const promo = await stripe.promotionCodes.list({
@@ -28,9 +28,9 @@ export async function POST(req: Request) {
       });
 
       if (promo.data.length > 0) {
-        // 🆕 Safely grab coupon.id with a TypeScript cast
-        couponId = (promo.data[0] as any).coupon.id;
-        console.log("✅ Promo code found:", promoCode, "Coupon ID:", couponId);
+        // ✅ Use promotion_code ID (not coupon)
+        promotionCodeId = promo.data[0].id;
+        console.log("✅ Promo code found:", promoCode, "Promo ID:", promotionCodeId);
       } else {
         console.warn("⚠️ Promo code not found or inactive:", promoCode);
       }
@@ -43,11 +43,11 @@ export async function POST(req: Request) {
       customer_email: email,
       line_items: [{ price: priceId, quantity: 1 }],
 
-      // Allow manual promo entry
+      // ✅ Show manual entry box
       allow_promotion_codes: true,
 
-      // Auto-apply if a valid promo was entered on your site
-      discounts: couponId ? [{ coupon: couponId }] : undefined,
+      // ✅ Automatically apply valid promo from your site
+      discounts: promotionCodeId ? [{ promotion_code: promotionCodeId }] : undefined,
 
       success_url: `${process.env.NEXT_PUBLIC_BASE_URL}/dashboard?success=true`,
       cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL}/signup?canceled=true`,
@@ -63,3 +63,4 @@ export async function POST(req: Request) {
     );
   }
 }
+
