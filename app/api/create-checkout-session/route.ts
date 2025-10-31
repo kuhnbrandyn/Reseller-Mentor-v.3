@@ -28,8 +28,8 @@ export async function POST(req: Request) {
       });
 
       if (promo.data.length > 0) {
-        // 🆕 Use the coupon ID tied to the promo
-        couponId = promo.data[0].coupon.id;
+        // 🆕 Safely grab coupon.id with a TypeScript cast
+        couponId = (promo.data[0] as any).coupon.id;
         console.log("✅ Promo code found:", promoCode, "Coupon ID:", couponId);
       } else {
         console.warn("⚠️ Promo code not found or inactive:", promoCode);
@@ -43,10 +43,10 @@ export async function POST(req: Request) {
       customer_email: email,
       line_items: [{ price: priceId, quantity: 1 }],
 
-      // 🆕 Allow user to manually add/change promo
+      // Allow manual promo entry
       allow_promotion_codes: true,
 
-      // 🆕 Auto-apply coupon if one was entered and valid
+      // Auto-apply if a valid promo was entered on your site
       discounts: couponId ? [{ coupon: couponId }] : undefined,
 
       success_url: `${process.env.NEXT_PUBLIC_BASE_URL}/dashboard?success=true`,
@@ -63,4 +63,3 @@ export async function POST(req: Request) {
     );
   }
 }
-
