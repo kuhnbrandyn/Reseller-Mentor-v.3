@@ -18,6 +18,7 @@ export default function SignUpPage() {
     setLoading(true);
 
     try {
+      // ✅ STEP 1: Check if profile exists
       const { data: existingProfile, error: profileError } = await supabase
         .from("profiles")
         .select("payment_status")
@@ -39,6 +40,7 @@ export default function SignUpPage() {
         }
       }
 
+      // ✅ STEP 2: Check if user already exists in Auth
       const { data: adminData, error: userError } =
         await supabase.auth.admin.listUsers();
 
@@ -54,6 +56,7 @@ export default function SignUpPage() {
         }
       }
 
+      // ✅ STEP 3: New signup (does not exist anywhere)
       const { data, error } = await supabase.auth.signUp({
         email: email.trim(),
         password: password.trim(),
@@ -71,24 +74,26 @@ export default function SignUpPage() {
       }
 
       if (data?.user) {
+        // 🧹 Reset chat thread and save email for chat widget
         localStorage.removeItem("thread_ts");
         if (email) {
           localStorage.setItem("user_email", email.trim());
         }
 
+        // ✅ STEP 4: Create Stripe Checkout Session
         try {
           const res = await fetch("/api/checkout", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               email: email.trim(),
-              priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_ID,
+              priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_ID, // replace with your live price ID
             }),
           });
 
           const data = await res.json();
           if (data.url) {
-            window.location.href = data.url;
+            window.location.href = data.url; // redirect to Stripe Checkout
             return;
           } else {
             console.error("Checkout error:", data.error);
@@ -170,7 +175,89 @@ export default function SignUpPage() {
         <h2 className="text-3xl font-bold text-[#E4B343] mb-10">
           What’s Included
         </h2>
-        {/* ... all your included features remain unchanged ... */}
+
+        <div className="grid md:grid-cols-2 gap-8 text-left text-gray-300">
+          <div className="flex items-start gap-3">
+            <span className="text-[#E4B343] text-2xl">💡</span>
+            <div>
+              <h3 className="font-semibold text-white">AI Mentor for Resellers</h3>
+              <p className="text-gray-400 text-sm">
+                Get instant answers with strategy, data, and long-term planning
+                behind every response.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-3">
+            <span className="text-[#E4B343] text-2xl">📋</span>
+            <div>
+              <h3 className="font-semibold text-white">Ongoing Supplier Lists</h3>
+              <p className="text-gray-400 text-sm">
+                Updated wholesale & liquidation sources, verified and ranked for
+                ROI.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-3">
+            <span className="text-[#E4B343] text-2xl">🛡️</span>
+            <div>
+              <h3 className="font-semibold text-white">Scam Avoidance Training</h3>
+              <p className="text-gray-400 text-sm">
+                Learn how to vet suppliers and protect your funds while finding
+                deals.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-3">
+            <span className="text-[#E4B343] text-2xl">🏛️</span>
+            <div>
+              <h3 className="font-semibold text-white">Business Setup Guides</h3>
+              <p className="text-gray-400 text-sm">
+                Structure your LLC, taxes, and operations correctly for scaling.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-3">
+            <span className="text-[#E4B343] text-2xl">🚚</span>
+            <div>
+              <h3 className="font-semibold text-white">Shipping & Pallet Mastery</h3>
+              <p className="text-gray-400 text-sm">
+                Learn how to buy, ship, and receive pallets with trusted freight
+                contacts.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-3">
+            <span className="text-[#E4B343] text-2xl">🎥</span>
+            <div>
+              <h3 className="font-semibold text-white">Streaming & Supply Kit</h3>
+              <p className="text-gray-400 text-sm">
+                Recommended gear and workflows to run high-converting Whatnot
+                shows like a pro.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-12 bg-gradient-to-r from-[#E4B343]/10 via-[#E4B343]/5 to-transparent border border-[#E4B343]/30 rounded-2xl p-6 hover:border-[#E4B343]/70 transition-all duration-300">
+          <div className="flex flex-col md:flex-row items-center justify-center gap-4 text-center md:text-left">
+            <span className="text-[#E4B343] text-3xl">🤖</span>
+            <div>
+              <h3 className="font-semibold text-[#E4B343] text-xl">
+                AI-Powered Vendor Website Scam Detection
+              </h3>
+              <p className="text-gray-400 text-sm mt-1">
+                Automatically analyze supplier websites for legitimacy, SSL
+                security, and hidden red flags before you buy — stay protected
+                when sourcing.
+              </p>
+            </div>
+          </div>
+        </div>
       </section>
 
       {/* === SIGNUP FORM === */}
@@ -190,6 +277,7 @@ export default function SignUpPage() {
           onChange={(e) => setPassword(e.target.value)}
           className="w-full mb-6 px-4 py-3 rounded-lg border border-gray-700 bg-transparent text-white focus:border-[#E4B343] focus:outline-none"
         />
+
         <button
           onClick={handleSignup}
           disabled={loading}
@@ -197,25 +285,89 @@ export default function SignUpPage() {
         >
           {loading ? "Processing..." : "Join Now"}
         </button>
+
         {/* 🆕 Promo note */}
-        <p className="text-gray-500 text-xs mt-3">
-          Promo codes applied at checkout
-        </p>
+        <p className="text-gray-500 text-xs mt-3">Promo codes applied at checkout</p>
+
         <p className="text-gray-400 mt-6 text-sm">
           Already have an account?{" "}
-          <a
-            href="/login"
-            className="text-[#E4B343] underline hover:text-[#d9a630]"
-          >
+          <a href="/login" className="text-[#E4B343] underline hover:text-[#d9a630]">
             Log In
           </a>
         </p>
       </section>
 
-      {/* === TESTIMONIALS, WAITLIST, FOOTER === */}
-      {/* (unchanged, keep all existing sections) */}
+      {/* === TESTIMONIALS === */}
+      <section className="max-w-5xl w-full px-6 grid md:grid-cols-3 gap-6 text-center mb-16">
+        <div className="bg-[#111] p-6 rounded-xl border border-gray-800 shadow-md">
+          <p className="italic text-gray-400">
+            “I scaled my Whatnot sales 2x using tips from Reseller Mentor AI!”
+          </p>
+          <p className="text-[#E4B343] mt-3 font-semibold">— Amanda R.</p>
+        </div>
+
+        <div className="bg-[#111] p-6 rounded-xl border border-gray-800 shadow-md">
+          <p className="italic text-gray-400">
+            “The Supplier Vault saved me weeks of sourcing time.”
+          </p>
+          <p className="text-[#E4B343] mt-3 font-semibold">— Chris M.</p>
+        </div>
+
+        <div className="bg-[#111] p-6 rounded-xl border border-gray-800 shadow-md">
+          <p className="italic text-gray-400">
+            “Worth every penny. Finally a mentor who gets reselling!”
+          </p>
+          <p className="text-[#E4B343] mt-3 font-semibold">— Jenna L.</p>
+        </div>
+      </section>
+
+      {/* === WAITLIST === */}
+      <section className="w-full bg-black py-12 text-center border-t border-[#E4B343]/30">
+        <h3 className="text-2xl font-semibold mb-4 text-[#E4B343]">
+          Want early access to new AI features?
+        </h3>
+        <p className="text-gray-300 mb-4">
+          Join the waitlist and be first to test beta tools and supplier
+          updates.
+        </p>
+
+        <div className="flex flex-col md:flex-row justify-center gap-4 items-center">
+          <input
+            type="email"
+            placeholder="Enter your email"
+            value={waitlistEmail}
+            onChange={(e) => setWaitlistEmail(e.target.value)}
+            className="px-4 py-3 rounded-lg border border-gray-700 bg-transparent text-white focus:border-[#E4B343] focus:outline-none w-72"
+          />
+          <button
+            onClick={handleWaitlistJoin}
+            disabled={joiningWaitlist}
+            className="bg-[#E4B343] text-black px-6 py-3 rounded-lg font-semibold hover:bg-[#d9a630] transition"
+          >
+            {joiningWaitlist ? "Joining..." : "Join Waitlist"}
+          </button>
+        </div>
+      </section>
+
+      {/* === STATIC CONTACT EMAIL + COPYRIGHT === */}
+      <footer className="text-center text-gray-400 mt-12 pb-6 text-sm border-t border-gray-800 pt-4 w-full">
+        <p>
+          Contact:{" "}
+          <a
+            href="mailto:support@myresellermentor.com"
+            className="text-[#E4B343] hover:underline"
+          >
+            support@myresellermentor.com
+          </a>
+        </p>
+        <p className="mt-1">
+          &copy; {new Date().getFullYear()} My Reseller Mentor. All rights
+          reserved.
+        </p>
+      </footer>
     </main>
   );
 }
+
 
 
