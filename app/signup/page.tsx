@@ -172,13 +172,14 @@ export default function SignUpPage() {
 
       {/* === WHAT'S INCLUDED === */}
       <section className="max-w-5xl w-full px-6 text-center mb-16">
-        <div className="flex justify-center mb-10">
-  <div className="relative pb-[56.25%] h-0 w-full max-w-3xl overflow-hidden rounded-2xl shadow-lg">
+       
+        {/* === PROMO VIDEO === */}
+<div className="w-full flex justify-center">
+  <div className="relative aspect-video w-full max-w-4xl rounded-2xl overflow-hidden shadow-[0_0_20px_rgba(228,179,67,0.3)] border border-[#E4B343]/30">
     <iframe
-      width="560"
-      height="315"
       src="https://www.youtube.com/embed/bVc_YMYx2-E?si=wWGSlR-dcOiP9n1Q"
-      title="YouTube video player"
+      title="Reseller Mentor AI Promo"
+      className="absolute top-0 left-0 w-full h-full"
       frameBorder="0"
       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
       referrerPolicy="strict-origin-when-cross-origin"
@@ -186,9 +187,10 @@ export default function SignUpPage() {
     ></iframe>
   </div>
 </div>
-        <h2 className="text-3xl font-bold text-[#E4B343] mb-10">
-          What’s Included
-        </h2>
+
+<h2 className="text-3xl font-bold text-[#E4B343] mt-8 mb-8 text-center">
+  What’s Included
+</h2>
 
         <div className="grid md:grid-cols-2 gap-8 text-left text-gray-300">
           <div className="flex items-start gap-3">
