@@ -172,7 +172,20 @@ export default function SignUpPage() {
 
       {/* === WHAT'S INCLUDED === */}
       <section className="max-w-5xl w-full px-6 text-center mb-16">
-        <iframe width="560" height="315" src="https://www.youtube.com/embed/bVc_YMYx2-E?si=fSaPPLFvPgvTMRft" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+        <div className="flex justify-center mb-10">
+  <div className="relative pb-[56.25%] h-0 w-full max-w-3xl overflow-hidden rounded-2xl shadow-lg">
+    <iframe
+      width="560"
+      height="315"
+      src="https://www.youtube.com/embed/bVc_YMYx2-E?si=wWGSlR-dcOiP9n1Q"
+      title="YouTube video player"
+      frameBorder="0"
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+      referrerPolicy="strict-origin-when-cross-origin"
+      allowFullScreen
+    ></iframe>
+  </div>
+</div>
         <h2 className="text-3xl font-bold text-[#E4B343] mb-10">
           What’s Included
         </h2>
