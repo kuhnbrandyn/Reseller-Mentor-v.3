@@ -74,41 +74,41 @@ function computeTrustScore(f: {
   let score = 50;
 
   // HTTPS / SSL
-  score += f.https ? 8 : -10;
-  score += f.sslValid ? 8 : -12;
+  score += f.https ? 8 : -8;
+  score += f.sslValid ? 8 : -10;
 
-  // SSL Expiry
+  // SSL expiry
   if (typeof f.sslExpiryDays === "number") {
     if (f.sslExpiryDays > 365) score += 3;
     else if (f.sslExpiryDays > 90) score += 1;
   }
 
-  // Contact Info
+  // Contact info
   if (f.hasContact === true) score += 6;
-  else if (f.hasContact === false) score -= 6;
+  else if (f.hasContact === false) score -= 4;
 
-  // Trust Signals (policy pages, payments, etc.)
+  // Trust signals
   if (typeof f.trustSignals === "number") {
     if (f.trustSignals >= 0.8) score += 12;
-    else if (f.trustSignals >= 0.5) score += 6;
-    else if (f.trustSignals < 0.2) score -= 8;
+    else if (f.trustSignals >= 0.5) score += 8;
+    else if (f.trustSignals < 0.2) score -= 6;
   }
 
-  // 🕓 Domain Age Weighting
+  // 🕓 Domain age weighting (softer)
   if (f.domainAgeMonths) {
-    if (f.domainAgeMonths > 24) score += 10;
-    else if (f.domainAgeMonths > 6) score += 4;
-    else score -= 10;
+    if (f.domainAgeMonths > 24) score += 8;
+    else if (f.domainAgeMonths > 6) score += 6;
+    else score -= 6;
   }
 
-  // ⚠️ Scam Mention Weighting
-  if (f.scamLevel === "High") score -= 25;
-  else if (f.scamLevel === "Moderate") score -= 10;
+  // ⚠️ Scam mention weighting (softer)
+  if (f.scamLevel === "High") score -= 20;
+  else if (f.scamLevel === "Moderate") score -= 6;
 
-  // Penalty for generic negative signals
-  score -= Math.min(f.negativeSignals, 5) * 10;
+  // Generic negative signals
+  score -= Math.min(f.negativeSignals, 5) * 8;
 
-  return clamp(Math.round(score), 5, 95);
+  return Math.max(5, Math.min(95, Math.round(score)));
 }
 
 /* ------------------------------------------------------------------
