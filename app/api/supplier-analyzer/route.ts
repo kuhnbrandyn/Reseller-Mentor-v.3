@@ -37,8 +37,7 @@ function toRiskLevel(score: number): "Low" | "Moderate" | "High" {
 }
 
 /* ------------------------------------------------------------------
-   🔎 Google Scam Mention Check (Free)
-   Uses a public proxy to fetch Google search results for "<domain> scam"
+   Optional Google Scam Mention Lookup (non-scoring)
 -------------------------------------------------------------------*/
 async function checkScamMentions(domain: string): Promise<"Low" | "Moderate" | "High" | "Unknown"> {
   try {
@@ -58,8 +57,7 @@ async function checkScamMentions(domain: string): Promise<"Low" | "Moderate" | "
 }
 
 /* ------------------------------------------------------------------
-   🧮 Trust Scoring (Deterministic)
-   Adds domain age + scam weighting
+   Trust Scoring (Deterministic)
 -------------------------------------------------------------------*/
 function computeTrustScore(f: {
   https: boolean;
@@ -68,51 +66,32 @@ function computeTrustScore(f: {
   hasContact: boolean | null;
   trustSignals: number | null;
   negativeSignals: number;
-  domainAgeMonths: number | null;
-  scamLevel?: string;
 }) {
   let score = 50;
 
-  // HTTPS / SSL
-  score += f.https ? 8 : -8;
-  score += f.sslValid ? 8 : -10;
+  score += f.https ? 8 : -10;
+  score += f.sslValid ? 8 : -12;
 
-  // SSL expiry
   if (typeof f.sslExpiryDays === "number") {
     if (f.sslExpiryDays > 365) score += 3;
     else if (f.sslExpiryDays > 90) score += 1;
   }
 
-  // Contact info
   if (f.hasContact === true) score += 6;
-  else if (f.hasContact === false) score -= 4;
+  else if (f.hasContact === false) score -= 6;
 
-  // Trust signals
   if (typeof f.trustSignals === "number") {
     if (f.trustSignals >= 0.8) score += 12;
-    else if (f.trustSignals >= 0.5) score += 8;
-    else if (f.trustSignals < 0.2) score -= 6;
+    else if (f.trustSignals >= 0.5) score += 6;
+    else if (f.trustSignals < 0.2) score -= 8;
   }
 
-  // 🕓 Domain age weighting (softer)
-  if (f.domainAgeMonths) {
-    if (f.domainAgeMonths > 24) score += 8;
-    else if (f.domainAgeMonths > 6) score += 6;
-    else score -= 6;
-  }
-
-  // ⚠️ Scam mention weighting (softer)
-  if (f.scamLevel === "High") score -= 20;
-  else if (f.scamLevel === "Moderate") score -= 6;
-
-  // Generic negative signals
-  score -= Math.min(f.negativeSignals, 5) * 8;
-
-  return Math.max(5, Math.min(95, Math.round(score)));
+  score -= Math.min(f.negativeSignals, 5) * 10;
+  return clamp(Math.round(score), 5, 95);
 }
 
 /* ------------------------------------------------------------------
-   🧠 Supplier Analyzer Prompt
+   Supplier Analyzer Prompt
 -------------------------------------------------------------------*/
 function buildSupplierAnalyzerPrompt(args: {
   url: string;
@@ -170,7 +149,7 @@ Return JSON only in this format:
 }
 
 /* ------------------------------------------------------------------
-   🚀 Main Handler
+   Main Handler
 -------------------------------------------------------------------*/
 export async function POST(req: Request) {
   try {
@@ -189,10 +168,11 @@ export async function POST(req: Request) {
     // === Step 1: Collect Data ===
     const ssl = await safe("SSL", getSslStatus(domain));
     const homepage = await safe("HOMEPAGE", fetchHomepageIntel(input));
-    const scamLevel = await checkScamMentions(domain);
+    const scamLevel = await checkScamMentions(domain); // context only
 
-    const title = (homepage as any)?.title ?? null;
-    const metaDescription = (homepage as any)?.metaDescription ?? null;
+    const title = (homepage as any)?.title ?? (homepage as any)?.meta?.title ?? null;
+    const metaDescription =
+      (homepage as any)?.metaDescription ?? (homepage as any)?.meta?.metaDesc ?? null;
     const h1 = (homepage as any)?.h1 ?? null;
     const hasContact = (homepage as any)?.hasContact ?? null;
     const trustSignals = (homepage as any)?.trustSignals ?? 0;
@@ -209,7 +189,7 @@ export async function POST(req: Request) {
       sampleText,
     };
 
-    // === Step 2: Compute Base Score (with new weighting) ===
+    // === Step 2: Compute Base Score ===
     const preScore = computeTrustScore({
       https,
       sslValid: features.sslValid,
@@ -217,8 +197,6 @@ export async function POST(req: Request) {
       hasContact: features.hasContact,
       trustSignals: features.trustSignals,
       negativeSignals: 0,
-      domainAgeMonths: ssl?.domainAgeMonths ?? null,
-      scamLevel,
     });
 
     // === Step 3: Ask OpenAI for Contextual Assessment ===
@@ -258,21 +236,27 @@ export async function POST(req: Request) {
     );
     const finalLevel = toRiskLevel(finalScore);
 
-    // === Step 5: Return Unified Output ===
+    // === Step 5: Contextual Intel (non-scoring)
+    const domainAge = ssl?.domainAgeMonths
+      ? (ssl.domainAgeMonths / 12).toFixed(1)
+      : "unknown";
+
+    // === Step 6: Return Unified Output ===
     return NextResponse.json({
       ok: true,
       tool: "supplier-analyzer",
       data: {
         trust_score: finalScore,
         risk_level: finalLevel,
-        scam_mentions: scamLevel,
         summary:
           aiOut.summary ||
           "Balanced assessment based on reseller-oriented credibility factors.",
         positives: aiOut.positives || [],
         red_flags: aiOut.red_flags || [],
+        domain_age_years: domainAge,
+        scam_mentions: scamLevel,
         notes: [
-          "v3 - Added Google scam mention detection + domain age weighting",
+          "v2.1 - contextual intel added (domain age + scam mentions, no score impact)",
         ],
       },
     });
