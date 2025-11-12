@@ -1,186 +1,187 @@
-// app/tools/start-bid-calculator/page.tsx
 "use client";
 
 import { useState } from "react";
 
 export default function StartBidCalculator() {
-  const [items, setItems] = useState<number | null>(null);
-  const [lotCost, setLotCost] = useState<number | null>(null);
-  const [shipping, setShipping] = useState<number | null>(null);
-  const [platformFee, setPlatformFee] = useState<number | null>(null);
-  const [results, setResults] = useState<any | null>(null);
+  const [lotCost, setLotCost] = useState<number>(0);
+  const [shippingCost, setShippingCost] = useState<number>(0);
+  const [totalItems, setTotalItems] = useState<number>(0);
+  const [platformFee, setPlatformFee] = useState<number>(15); // default %
+  const [results, setResults] = useState<any>(null);
 
-  function calculate() {
-    if (!items || !lotCost || !platformFee) return;
+  const handleCalculate = () => {
+    if (!lotCost || !shippingCost || !totalItems) return;
 
-    const totalCost = (lotCost || 0) + (shipping || 0);
-    const costPerItem = totalCost / (items || 1);
-    const feePerItem = (costPerItem * (platformFee || 0)) / 100;
+    const totalCost = lotCost + shippingCost;
+    const costPerItem = totalCost / totalItems;
+    const feePerItem = costPerItem * (platformFee / 100);
     const allInCost = costPerItem + feePerItem;
 
-    // Suggested start bid range (20%–30%)
-    const low = allInCost * 1.2;
-    const high = allInCost * 1.3;
+    // Suggested Start Bid Range (20–30% above all-in cost)
+    const suggestedLow = allInCost * 1.2;
+    const suggestedHigh = allInCost * 1.3;
 
-    const netLow = low - allInCost;
-    const netHigh = high - allInCost;
-    const roiLow = (netLow / allInCost) * 100;
-    const roiHigh = (netHigh / allInCost) * 100;
+    // Estimated Net Profit Per Item
+    const netProfitLow = suggestedLow - allInCost;
+    const netProfitHigh = suggestedHigh - allInCost;
+
+    // ROI Range
+    const roiLow = 20;
+    const roiHigh = 30;
+
+    // Total Potential ROI (for the full lot)
+    const potentialLow = suggestedLow * totalItems - totalCost;
+    const potentialHigh = suggestedHigh * totalItems - totalCost;
 
     setResults({
       totalCost,
       costPerItem,
       feePerItem,
       allInCost,
-      low,
-      high,
-      netLow,
-      netHigh,
+      suggestedLow,
+      suggestedHigh,
+      netProfitLow,
+      netProfitHigh,
       roiLow,
       roiHigh,
+      potentialLow,
+      potentialHigh,
     });
-  }
+  };
 
   return (
-    <div className="max-w-3xl mx-auto px-6 py-10">
-      <h1 className="text-2xl md:text-3xl font-semibold mb-2 text-white">
-        Live Show Start-Bid Calculator{" "}
-        <span className="text-[#E4B343]">📦</span>
+    <div className="min-h-screen bg-black text-white p-6 md:p-10">
+      <h1 className="text-3xl font-bold text-[#E4B343] mb-2">
+        Live Show Start-Bid Calculator 📦
       </h1>
       <p className="text-gray-400 mb-8">
-        Use your bulk-buy details to instantly calculate a recommended start-bid
-        range for live shows — with built-in ROI and profit.
+        Enter your bulk buy details to calculate suggested live show starting bids and profit
+        potential.
       </p>
 
-      {/* Input Fields */}
-      <div className="bg-[#111] border border-gray-800 rounded-xl p-6 space-y-4 mb-6">
+      {/* === Input Section === */}
+      <div className="bg-[#0A0A0A] border border-[#E4B343]/40 rounded-2xl p-6 space-y-4 max-w-3xl">
         <div className="grid md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm text-gray-400 mb-1">
-              Total Items in Lot
-            </label>
+            <label className="block text-gray-400 text-sm mb-1">Lot Cost ($)</label>
             <input
               type="number"
-              value={items ?? ""}
-              onChange={(e) => setItems(Number(e.target.value))}
-              className="w-full bg-black border border-gray-800 rounded-lg px-3 py-2 text-gray-200 focus:ring-2 focus:ring-[#E4B343]/40 focus:outline-none"
-              placeholder="e.g. 200"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm text-gray-400 mb-1">
-              Lot Purchase Cost ($)
-            </label>
-            <input
-              type="number"
-              value={lotCost ?? ""}
-              onChange={(e) => setLotCost(Number(e.target.value))}
-              className="w-full bg-black border border-gray-800 rounded-lg px-3 py-2 text-gray-200 focus:ring-2 focus:ring-[#E4B343]/40 focus:outline-none"
+              value={lotCost || ""}
+              onChange={(e) => setLotCost(parseFloat(e.target.value))}
+              className="w-full p-2 bg-black border border-gray-700 rounded-md text-white"
               placeholder="e.g. 2000"
             />
           </div>
 
           <div>
-            <label className="block text-sm text-gray-400 mb-1">
-              Shipping / Freight ($)
-            </label>
+            <label className="block text-gray-400 text-sm mb-1">Shipping Cost ($)</label>
             <input
               type="number"
-              value={shipping ?? ""}
-              onChange={(e) => setShipping(Number(e.target.value))}
-              className="w-full bg-black border border-gray-800 rounded-lg px-3 py-2 text-gray-200 focus:ring-2 focus:ring-[#E4B343]/40 focus:outline-none"
+              value={shippingCost || ""}
+              onChange={(e) => setShippingCost(parseFloat(e.target.value))}
+              className="w-full p-2 bg-black border border-gray-700 rounded-md text-white"
               placeholder="e.g. 500"
             />
           </div>
 
           <div>
-            <label className="block text-sm text-gray-400 mb-1">
-              Platform Fees (%)
-            </label>
+            <label className="block text-gray-400 text-sm mb-1">Total Items in Lot</label>
             <input
               type="number"
-              value={platformFee ?? ""}
-              onChange={(e) => setPlatformFee(Number(e.target.value))}
-              className="w-full bg-black border border-gray-800 rounded-lg px-3 py-2 text-gray-200 focus:ring-2 focus:ring-[#E4B343]/40 focus:outline-none"
+              value={totalItems || ""}
+              onChange={(e) => setTotalItems(parseFloat(e.target.value))}
+              className="w-full p-2 bg-black border border-gray-700 rounded-md text-white"
+              placeholder="e.g. 200"
+            />
+          </div>
+
+          <div>
+            <label className="block text-gray-400 text-sm mb-1">Platform Fee (%)</label>
+            <input
+              type="number"
+              value={platformFee || ""}
+              onChange={(e) => setPlatformFee(parseFloat(e.target.value))}
+              className="w-full p-2 bg-black border border-gray-700 rounded-md text-white"
               placeholder="e.g. 15"
             />
           </div>
         </div>
 
-        {/* Calculate Button */}
         <button
-          onClick={calculate}
-          className="mt-4 w-full bg-[#E4B343] text-black font-semibold py-2 rounded-lg hover:opacity-90 transition"
+          onClick={handleCalculate}
+          className="mt-4 w-full md:w-auto bg-[#E4B343] hover:bg-[#d2a53b] text-black font-semibold py-2 px-6 rounded-md transition"
         >
-          Calculate Start-Bid Range
+          Calculate
         </button>
       </div>
 
-      {/* Results */}
+      {/* === Results Section === */}
       {results && (
-        <div className="bg-[#111] border border-gray-800 rounded-xl p-6 space-y-4 text-gray-200">
-          <h2 className="text-xl font-semibold text-[#E4B343] mb-2">
-            Results Summary
-          </h2>
+        <div className="mt-8 bg-[#0A0A0A] border border-[#E4B343]/40 rounded-2xl p-6 max-w-3xl">
+          <h2 className="text-2xl font-bold text-[#E4B343] mb-4">Results Summary</h2>
 
-          <div className="grid md:grid-cols-2 gap-4">
+          <div className="grid md:grid-cols-2 gap-4 text-gray-300 text-sm mb-4">
             <p>
-              <span className="text-gray-400">Total Cost: </span>$
-              {results.totalCost.toFixed(2)}
+              <span className="text-gray-400">Total Cost:</span>{" "}
+              <span className="font-semibold">${results.totalCost.toFixed(2)}</span>
             </p>
             <p>
-              <span className="text-gray-400">Cost per Item: </span>$
-              {results.costPerItem.toFixed(2)}
+              <span className="text-gray-400">Cost per Item:</span>{" "}
+              <span className="font-semibold">${results.costPerItem.toFixed(2)}</span>
             </p>
             <p>
-              <span className="text-gray-400">Platform Fee per Item: </span>$
-              {results.feePerItem.toFixed(2)}
+              <span className="text-gray-400">Platform Fee per Item:</span>{" "}
+              <span className="font-semibold">${results.feePerItem.toFixed(2)}</span>
             </p>
             <p>
-              <span className="text-gray-400">All-In Cost per Item: </span>$
-              {results.allInCost.toFixed(2)}
+              <span className="text-gray-400">All-In Cost per Item:</span>{" "}
+              <span className="font-semibold">${results.allInCost.toFixed(2)}</span>
             </p>
           </div>
 
-          <div className="mt-4 border-t border-gray-800 pt-4">
-            <h3 className="text-lg font-semibold text-[#E4B343] mb-1">
+          <hr className="border-gray-800 my-4" />
+
+          <div className="text-gray-300">
+            <p className="text-[#E4B343] text-lg font-semibold mb-1">
               Suggested Start-Bid Range (Live Show)
-            </h3>
+            </p>
             <p className="text-2xl font-bold text-[#E4B343]">
-              ${results.low.toFixed(2)} – ${results.high.toFixed(2)}
+              ${results.suggestedLow.toFixed(2)} – ${results.suggestedHigh.toFixed(2)}
             </p>
             <p className="text-sm text-gray-400 mt-1">
-              Based on 20–30% above all-in cost.
+              Based on {results.roiLow}%–{results.roiHigh}% above all-in cost.
+            </p>
+          </div>
+
+          <div className="mt-4 grid md:grid-cols-2 gap-4 text-sm text-gray-300">
+            <p>
+              Estimated Net Profit / Item:{" "}
+              <span className="text-green-400 font-semibold">
+                ${results.netProfitLow.toFixed(2)} – ${results.netProfitHigh.toFixed(2)}
+              </span>
+            </p>
+            <p>
+              Projected ROI:{" "}
+              <span className="text-green-400 font-semibold">
+                {results.roiLow.toFixed(1)}% – {results.roiHigh.toFixed(1)}%
+              </span>
+            </p>
+          </div>
+
+          <hr className="border-gray-800 my-4" />
+
+          <div className="text-gray-300">
+            <p className="text-[#E4B343] text-lg font-semibold mb-1">
+              💰 Total Potential ROI (Entire Lot)
             </p>
 
-            {/* Net profit + ROI */}
-            <div className="grid md:grid-cols-2 gap-2 mt-4 text-sm">
-              <p>
-                <span className="text-gray-400">Estimated Net Profit / Item: </span>
-                <span className="text-green-400">
-                  ${results.netLow.toFixed(2)} – ${results.netHigh.toFixed(2)}
-                </span>
-              </p>
-              <p>
-                <span className="text-gray-400">Projected ROI: </span>
-                <span className="text-green-400">
-                  {results.roiLow.toFixed(1)}% – {results.roiHigh.toFixed(1)}%
-                </span>
-              </p>
-            </div>
+            <p className="text-2xl font-bold text-green-400">
+              ${results.potentialLow.toLocaleString()} – ${results.potentialHigh.toLocaleString()}
+            </p>
 
-            {/* Bar visualization */}
-            <div className="mt-6 bg-black border border-gray-800 rounded-lg h-6 relative overflow-hidden">
-              <div
-                className="absolute left-0 top-0 h-full bg-gray-700"
-                style={{ width: "60%" }}
-              />
-              <div
-                className="absolute left-[60%] top-0 h-full bg-gradient-to-r from-[#E4B343] to-yellow-500"
-                style={{ width: "20%" }}
-              />
-            </div>
+            <p className="text-sm text-gray-400 mt-1">
+              Based on {results.roiLow}%–{results.roiHigh}% above all-in cost × {totalItems} items.
+            </p>
           </div>
         </div>
       )}
