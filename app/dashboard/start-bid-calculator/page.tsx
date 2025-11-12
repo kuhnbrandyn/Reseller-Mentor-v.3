@@ -10,9 +10,10 @@ export default function StartBidCalculator() {
   const [results, setResults] = useState<any>(null);
 
   const handleCalculate = () => {
-    if (!lotCost || !shippingCost || !totalItems) return;
+    // allow shipping to be 0, but lot cost + items must be > 0
+    if (!lotCost || !totalItems) return;
 
-    const totalCost = lotCost + shippingCost;
+    const totalCost = lotCost + (shippingCost || 0);
     const costPerItem = totalCost / totalItems;
     const feePerItem = costPerItem * (platformFee / 100);
     const allInCost = costPerItem + feePerItem;
@@ -25,13 +26,13 @@ export default function StartBidCalculator() {
     const netProfitLow = suggestedLow - allInCost;
     const netProfitHigh = suggestedHigh - allInCost;
 
-    // ROI Range
+    // ROI % range (still 20–30% markup)
     const roiLow = 20;
     const roiHigh = 30;
 
-    // Total Potential ROI (for the full lot)
-    const potentialLow = suggestedLow * totalItems - totalCost;
-    const potentialHigh = suggestedHigh * totalItems - totalCost;
+    // ✅ Total Potential Profit (for the full lot)
+    const potentialLow = netProfitLow * totalItems;
+    const potentialHigh = netProfitHigh * totalItems;
 
     setResults({
       totalCost,
@@ -161,7 +162,7 @@ export default function StartBidCalculator() {
               </span>
             </p>
             <p>
-              Projected ROI:{" "}
+              Projected ROI (per item):{" "}
               <span className="text-green-400 font-semibold">
                 {results.roiLow.toFixed(1)}% – {results.roiHigh.toFixed(1)}%
               </span>
@@ -172,7 +173,7 @@ export default function StartBidCalculator() {
 
           <div className="text-gray-300">
             <p className="text-[#E4B343] text-lg font-semibold mb-1">
-              💰 Total Potential ROI (Entire Lot)
+              💰 Total Potential Profit (Entire Lot)
             </p>
 
             <p className="text-2xl font-bold text-green-400">
@@ -180,7 +181,7 @@ export default function StartBidCalculator() {
             </p>
 
             <p className="text-sm text-gray-400 mt-1">
-              Based on {results.roiLow}%–{results.roiHigh}% above all-in cost × {totalItems} items.
+              Based on net profit per item × {totalItems} items.
             </p>
           </div>
         </div>
@@ -188,3 +189,4 @@ export default function StartBidCalculator() {
     </div>
   );
 }
+
