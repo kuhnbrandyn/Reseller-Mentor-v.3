@@ -13,7 +13,6 @@ export default function DashboardLayout({
   const pathname = usePathname();
 
   const navLinks = [
-    const navLinks = [
   { href: "/dashboard/ai-mentor", label: "AI Mentor" },
   { href: "/dashboard/vault", label: "Supplier Vault" },
   { href: "/dashboard/scams", label: "Avoid Scams" },
