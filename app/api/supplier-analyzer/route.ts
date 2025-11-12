@@ -37,6 +37,26 @@ function toRiskLevel(score: number): "Low" | "Moderate" | "High" {
 }
 
 /* ------------------------------------------------------------------
+   Optional Google Scam Mention Lookup (non-scoring)
+-------------------------------------------------------------------*/
+async function checkScamMentions(domain: string): Promise<"Low" | "Moderate" | "High" | "Unknown"> {
+  try {
+    const query = encodeURIComponent(`${domain} scam`);
+    const res = await fetch(
+      `https://api.allorigins.win/raw?url=https://www.google.com/search?q=${query}`
+    );
+    const html = await res.text();
+    const matches = (html.match(/scam|fraud|complaint|ripoff|fake/gi) || []).length;
+    if (matches > 5) return "High";
+    if (matches > 2) return "Moderate";
+    return "Low";
+  } catch (err) {
+    console.warn("Scam mention lookup failed:", err);
+    return "Unknown";
+  }
+}
+
+/* ------------------------------------------------------------------
    Trust Scoring (Deterministic)
 -------------------------------------------------------------------*/
 function computeTrustScore(f: {
@@ -48,6 +68,7 @@ function computeTrustScore(f: {
   negativeSignals: number;
 }) {
   let score = 50;
+
   score += f.https ? 8 : -10;
   score += f.sslValid ? 8 : -12;
 
@@ -147,6 +168,7 @@ export async function POST(req: Request) {
     // === Step 1: Collect Data ===
     const ssl = await safe("SSL", getSslStatus(domain));
     const homepage = await safe("HOMEPAGE", fetchHomepageIntel(input));
+    const scamLevel = await checkScamMentions(domain); // context only
 
     const title = (homepage as any)?.title ?? (homepage as any)?.meta?.title ?? null;
     const metaDescription =
@@ -214,7 +236,12 @@ export async function POST(req: Request) {
     );
     const finalLevel = toRiskLevel(finalScore);
 
-    // === Step 5: Return Unified Output ===
+    // === Step 5: Contextual Intel (non-scoring)
+    const domainAge = ssl?.domainAgeMonths
+      ? (ssl.domainAgeMonths / 12).toFixed(1)
+      : "unknown";
+
+    // === Step 6: Return Unified Output ===
     return NextResponse.json({
       ok: true,
       tool: "supplier-analyzer",
@@ -226,7 +253,11 @@ export async function POST(req: Request) {
           "Balanced assessment based on reseller-oriented credibility factors.",
         positives: aiOut.positives || [],
         red_flags: aiOut.red_flags || [],
-        notes: ["v2 - separated API route for supplier analyzer"],
+        domain_age_years: domainAge,
+        scam_mentions: scamLevel,
+        notes: [
+          "v2.1 - contextual intel added (domain age + scam mentions, no score impact)",
+        ],
       },
     });
   } catch (err: any) {
@@ -234,3 +265,4 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }
+

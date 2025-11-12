@@ -13,15 +13,16 @@ export default function DashboardLayout({
   const pathname = usePathname();
 
   const navLinks = [
-    { href: "/dashboard/ai-mentor", label: "AI Mentor" },
-    { href: "/dashboard/vault", label: "Supplier Vault" },
-    { href: "/dashboard/scams", label: "Avoid Scams" },
-    { href: "/dashboard/business", label: "Business Setup" },
-    { href: "/dashboard/sourcing", label: "Pro Sourcing Tips" },
-    { href: "/dashboard/shipping", label: "Shipping Pallets" },
-    { href: "/dashboard/supplier-analyzer", label: "Website Scam Assist" },
-    { href: "/dashboard/supply-list", label: "Supply List" },
-  ];
+  { href: "/dashboard/ai-mentor", label: "AI Mentor" },
+  { href: "/dashboard/vault", label: "Supplier Vault" },
+  { href: "/dashboard/scams", label: "Avoid Scams" },
+  { href: "/dashboard/business", label: "Business Setup" },
+  { href: "/dashboard/sourcing", label: "Pro Sourcing Tips" },
+  { href: "/dashboard/shipping", label: "Shipping Pallets" },
+  { href: "/dashboard/supplier-analyzer", label: "Website Scam Assist" },
+  { href: "/dashboard/start-bid-calculator", label: "Start-Bid Calculator" },
+  { href: "/dashboard/supply-list", label: "Supply List" },
+];
 
   return (
     <div className="flex min-h-screen bg-black text-white relative">
