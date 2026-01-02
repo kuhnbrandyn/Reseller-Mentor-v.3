@@ -160,7 +160,7 @@ export default function SignUpPage() {
             Promo 2026: $99
           </p>
           <p className="text-gray-300 text-sm mt-1">
-            <span className="text-[#E4B343] font-semibold">$12.41/month</span>{" "}
+            <span className="text-[#E4B343] font-semibold">$8.25/month</span>{" "}
             billed annually
           </p>
           <p className="text-xs text-gray-500 mt-2">
