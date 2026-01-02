@@ -157,7 +157,7 @@ export default function SignUpPage() {
         <div className="inline-block bg-[#111] border border-[#E4B343]/40 px-8 py-5 rounded-2xl shadow-lg mb-10">
           <p className="text-gray-400 text-sm line-through">Originally $599</p>
           <p className="text-4xl font-bold text-[#E4B343] mt-1">
-            Promo First100: $149
+            Promo 2026: $99
           </p>
           <p className="text-gray-300 text-sm mt-1">
             <span className="text-[#E4B343] font-semibold">$12.41/month</span>{" "}
