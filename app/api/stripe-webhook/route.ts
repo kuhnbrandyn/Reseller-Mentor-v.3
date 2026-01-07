@@ -42,7 +42,9 @@ export async function POST(req: Request) {
     if (event.type === "checkout.session.completed") {
       const session = event.data.object as Stripe.Checkout.Session;
 
-      const email = "floroast@gmail.com";
+      const email =
+        session.customer_email ||
+        session.customer_details?.email;
 
 
       if (!email) {
