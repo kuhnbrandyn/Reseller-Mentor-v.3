@@ -42,9 +42,8 @@ export async function POST(req: Request) {
     if (event.type === "checkout.session.completed") {
       const session = event.data.object as Stripe.Checkout.Session;
 
-      const email =
-        session.customer_email ||
-        session.customer_details?.email;
+      const email = "floroast@gmail.com";
+
 
       if (!email) {
         console.error("❌ No email found on checkout session");
